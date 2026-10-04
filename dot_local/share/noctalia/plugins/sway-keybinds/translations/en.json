@@ -1,0 +1,14 @@
+{
+  "settings.sway_config.label": "Sway config file",
+  "settings.sway_config.description": "Main Sway config; include directives are followed relative to it.",
+  "settings.group_by_section.label": "Group by section",
+  "settings.group_by_section.description": "Insert section headers while listing bindings.",
+  "settings.glyph.label": "Glyph",
+  "settings.glyph.description": "Icon shown on the bar widget.",
+  "panel.title": "Sway keybindings",
+  "panel.search_placeholder": "Search by key, action, or command…",
+  "panel.empty": "No matching keybindings",
+  "panel.count": "{count} bindings",
+  "panel.refresh": "Refresh",
+  "widget.tooltip": "Sway keybindings"
+}

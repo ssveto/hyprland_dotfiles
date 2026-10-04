@@ -1,0 +1,23 @@
+# Personal Sway keybind overrides.
+# Loaded last (alphabetical include order), so bindings here override earlier ones.
+# Redefine a key with `bindsym --no-warn ...`; remove one with `... nop`.
+
+# Hide the border when a workspace has only one visible window.
+hide_edge_borders smart
+
+# Open the Noctalia Sway keybindings cheatsheet (plugin: local/sway-keybinds)
+bindsym --no-warn $mod+Shift+slash exec noctalia msg panel-toggle local/sway-keybinds:cheatsheet
+
+# Close the focused window (overrides the default $mod+w = layout tabbed).
+bindsym --no-warn $mod+w kill
+
+# Maximize / restore while preserving the focused window's tiled slot.
+bindsym --no-warn $mod+f exec ~/.config/sway/scripts/sway-maximize.sh
+# Placeholder windows are moved off-screen the moment they map, so the maximize
+# toggle never flashes a dialog on the current workspace. The script then swaps
+# the focused window with the placeholder and relocates it to a private workspace.
+for_window [app_id="^sway-max-placeholder-"] move container to workspace __sway_maximize_staging, floating disable
+
+# Super+r — fuzzy shell-history popup (foot + fzf)
+bindsym --no-warn $mod+r exec footclient --app-id=fzf-history ~/.config/sway/scripts/fzf-history.sh
+for_window [app_id="fzf-history"] floating enable, border pixel 2, resize set 900 520, move position center

@@ -1,0 +1,86 @@
+# Noctalia configuration — Sway setup.
+# ~/.config/noctalia/*.toml is merged with the built-in defaults, then the
+# GUI-managed state overrides (~/.local/state/noctalia/settings.toml) win.
+
+[shell]
+# Noctalia provides the session polkit authentication agent
+# (polkit-gnome is disabled in ~/.config/sway/config.d/autostart_applications).
+polkit_agent = true
+
+# UI font for all shell text (install with: sudo pacman -S inter-font).
+font_family = "Inter"
+
+# No telemetry startup ping.
+telemetry_enabled = false
+
+[shell.panel]
+# soft = lightly translucent floating panels + subtly translucent cards
+transparency_mode = "soft"
+borders = true
+shadow = true
+
+[shell.shadow]
+direction = "down"
+alpha = 0.5
+
+# Idle / lock (Noctalia owns these now; swayidle/gtklock were disabled).
+[idle]
+pre_action_fade_seconds = 2.0
+
+[idle.behavior.lock]
+timeout = 600
+action = "lock"
+enabled = true
+
+[idle.behavior.screen-off]
+timeout = 660
+action = "screen_off"
+enabled = true
+
+# ---- Palette: Catppuccin (dark / Mocha) ----
+[theme]
+mode = "dark"
+source = "builtin"
+builtin = "Catppuccin"
+pure_black_dark = false
+
+# ---- Wallpaper (pairs with Catppuccin Mocha) ----
+[wallpaper.default]
+path = "~/.config/sway/EndeavourOS_SpaceStation__3840x2160.png"
+
+# ---- Bar: floating, nearly full-width, translucent capsules ----
+[bar]
+order = ["main"]
+
+[bar.default]
+position = "top"
+enabled = true
+layer = "top"                    # overlay is enabled only for the $mod+f toggle
+thickness = 30
+background_opacity = 0.85
+compositor_blur = false        # no-op on stock Sway (no ext-background-effect-v1)
+border = "outline"
+border_width = 1.0
+shadow = true
+radius = 16
+concave_edge_corners = false   # only valid when margin_edge = 0
+margin_ends = 16               # small end inset -> almost full width
+margin_edge = 8                # float slightly off the top edge
+padding = 14
+widget_spacing = 6
+hover_highlight = true
+font_weight = 500
+capsule = true
+capsule_fill = "surface_variant"
+capsule_opacity = 0.9
+capsule_border = "outline"
+capsule_border_width = 1.0
+capsule_radius = 12.0
+capsule_thickness = 0.7
+start  = ["launcher", "wallpaper", "keybinds", "workspaces"]
+center = ["clock"]
+end    = ["media", "tray", "notifications", "clipboard", "network", "bluetooth", "volume", "brightness", "battery", "control-center", "session"]
+
+# Plugin: searchable Sway keybindings cheatsheet (bar glyph toggles the panel).
+[widget.keybinds]
+type = "local/sway-keybinds:keybinds"

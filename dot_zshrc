@@ -1,0 +1,105 @@
+# ~/.zshrc — zsh configuration
+# Completion, persistent shared history, fzf, and a few QoL plugins.
+# Companion: ~/.config/sway/scripts/fzf-history.sh  (Super+r popup)
+
+# ---------------------------------------------------------------------------
+# Environment
+# ---------------------------------------------------------------------------
+export EDITOR="${EDITOR:-vim}"
+export VISUAL="$EDITOR"
+export PAGER="${PAGER:-less}"
+
+# opencode
+export PATH="$HOME/.opencode/bin:$PATH"
+
+# Make sure our cache directories exist (completion dump / cache).
+: "${XDG_CACHE_HOME:=$HOME/.cache}"
+mkdir -p "$XDG_CACHE_HOME/zsh/zcompcache"
+
+# ---------------------------------------------------------------------------
+# History
+# ---------------------------------------------------------------------------
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=200000
+SAVEHIST=200000
+
+setopt EXTENDED_HISTORY       # store timestamps in the history file
+setopt INC_APPEND_HISTORY     # append as you type (crash-safe)
+setopt SHARE_HISTORY          # share history between all running sessions
+setopt HIST_IGNORE_ALL_DUPS   # drop older copies of a repeated command
+setopt HIST_IGNORE_SPACE      # don't record commands that start with a space
+setopt HIST_REDUCE_BLANKS     # squeeze redundant whitespace
+setopt HIST_VERIFY            # show the expanded line before running it
+setopt HIST_EXPIRE_DUPS_FIRST
+setopt HIST_FCNTL_LOCK
+
+# ---------------------------------------------------------------------------
+# Completion
+# ---------------------------------------------------------------------------
+# Extra community completions (zsh-completions package).
+fpath=(/usr/share/zsh/plugins/zsh-completions/src $fpath)
+
+autoload -Uz compinit
+compinit -d "$XDG_CACHE_HOME/zsh/zcompdump-$ZSH_VERSION"
+
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list \
+    'm:{a-zA-Z}={A-Za-z}' \
+    'r:|=*' \
+    'l:|=* r:|=*'
+zstyle ':completion:*' use-cache on
+zstyle ':completion:*' cache-path "$XDG_CACHE_HOME/zsh/zcompcache"
+zstyle ':completion:*' group-name ''
+zstyle ':completion:*:descriptions' format '%F{yellow}-- %d --%f'
+zstyle ':completion:*:warnings' format '%F{red}-- no matches --%f'
+[[ -n $LS_COLORS ]] && zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+
+# ---------------------------------------------------------------------------
+# Shell behaviour
+# ---------------------------------------------------------------------------
+setopt AUTO_CD             # typing a directory name changes into it
+setopt AUTO_PUSHD          # cd pushes onto the directory stack
+setopt PUSHD_IGNORE_DUPS
+setopt INTERACTIVE_COMMENTS
+setopt NO_BEEP
+setopt GLOB_DOTS           # glob * also matches dotfiles
+
+bindkey -e                 # emacs-style key bindings
+
+# ---------------------------------------------------------------------------
+# fzf
+# Ctrl-R: history   Ctrl-T: files   Alt-C: cd
+# Super+r opens the same history search in a floating foot window (sway).
+# ---------------------------------------------------------------------------
+[[ -r /usr/share/fzf/key-bindings.zsh ]] && source /usr/share/fzf/key-bindings.zsh
+[[ -r /usr/share/fzf/completion.zsh   ]] && source /usr/share/fzf/completion.zsh
+
+export FZF_DEFAULT_OPTS="${FZF_DEFAULT_OPTS:---height=40% --layout=reverse --border=rounded}"
+
+# ---------------------------------------------------------------------------
+# Plugins / prompt
+# ---------------------------------------------------------------------------
+if command -v zoxide >/dev/null 2>&1; then
+    eval "$(zoxide init zsh)"
+fi
+
+if command -v starship >/dev/null 2>&1; then
+    eval "$(starship init zsh)"
+fi
+
+# Autosuggestions, then syntax-highlighting (which must be sourced last).
+[[ -r /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && \
+    source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+[[ -r /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && \
+    source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+# ---------------------------------------------------------------------------
+# Aliases
+# ---------------------------------------------------------------------------
+alias ls='ls --color=auto'
+alias ll='ls -lah'
+alias la='ls -A'
+alias grep='grep --color=auto'
+alias ..='cd ..'
+alias ...='cd ../..'
+export PATH=$HOME/.local/bin:$PATH

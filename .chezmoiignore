@@ -1,0 +1,28 @@
+# chezmoi ignore patterns.
+# Paths are targets relative to $HOME. Anything here is never applied and is
+# excluded from `chezmoi status` / `chezmoi apply`.
+
+# Old / unused config backups kept on this machine
+.config/sway/backups
+.config/noctalia/backup-*
+
+# Noctalia runtime state that is regenerated or machine-specific
+.local/state/noctalia/notification_history.json
+.local/state/noctalia/notification_history_assets
+.local/state/noctalia/usage_counts.json
+.local/state/noctalia/recently_used.json
+.local/state/noctalia/instance.id
+.local/state/noctalia/state.toml
+.local/state/noctalia/community-templates
+.local/state/noctalia/community-palettes
+
+# Shell history and other private bits (never committed)
+.zsh_history
+.bash_history
+
+# Repo meta files that must NOT be applied to $HOME
+README.md
+pkglist-repo.txt
+pkglist-aur.txt
+export-packages.sh
+install.sh

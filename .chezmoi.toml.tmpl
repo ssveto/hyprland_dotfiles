@@ -1,0 +1,16 @@
+# Per-machine chezmoi configuration template.
+# `chezmoi init` renders this into ~/.config/chezmoi/chezmoi.toml.
+# Edit the values below for each machine, then run:
+#   chezmoi init && chezmoi apply
+#
+# On a new PC, if the monitor name differs, copy it from:
+#   swaymsg -t get_outputs
+# and set `is_endeavouros = false` if it is not an EndeavourOS install.
+
+[data]
+    # Primary monitor output name. Used by the Noctalia lockscreen widget
+    # and the per-monitor wallpaper entry in settings.toml.
+    output = "DP-3"
+
+    # EndeavourOS ships the eos-welcome app (auto-launched on login).
+    is_endeavouros = true
