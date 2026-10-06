@@ -12,3 +12,11 @@ vt = 1
 # ReGreet reads its own settings from /etc/greetd/regreet.toml
 command = "dbus-run-session cage -s -mlast -d -- regreet"
 user = "greeter"
+
+# Auto-login: start Hyprland directly on boot, skipping the greeter.
+# greetd runs this only once per boot (guarded by its runfile in /run), so
+# logging out still drops back to ReGreet normally. The XDG_* variables mirror
+# the [env] block in regreet.toml so the session is registered as Wayland.
+[initial_session]
+command = "env XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=Hyprland XDG_SESSION_DESKTOP=Hyprland start-hyprland"
+user = "sveto"
