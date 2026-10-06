@@ -27,7 +27,7 @@ style (plain `.config/` + `etc/` + `home_config/` trees, rsync-deployed).
 git clone https://github.com/ssveto/hyprland_dotfiles.git
 cd hyprland_dotfiles
 sudo ./hyprland-install.sh
-# preview first with: sudo ./hyprland-install.sh --dry-run
+# preview first with: ./hyprland-install.sh --dry-run
 ```
 
 Reboot and pick **Hyprland** at the ReGreet login screen.
@@ -51,8 +51,36 @@ placeholders that the installer substitutes (`/home/<user>` and `DP-3`).
 
 ## Fresh install: filesystem & snapshots
 
-The installer does **not** format disks. For **`/` use btrfs on the SSD** with a
-flat subvolume layout, so snapper and `snapper-rollback` work:
+### With Calamares (usual path)
+
+In the EndeavourOS installer:
+
+- **Erase disk → btrfs** for a single-disk layout, or
+- **Manual partitioning** if you want `/home` on the HDD: SSD partition → `/`
+  (**btrfs**), HDD partition → `/home` (**ext4**).
+
+Calamares creates the flat subvolumes `@`, `@cache`, `@log` (and `@home` only if
+`/home` is on the same disk). It does **not** create `@snapshots`, so
+`lib/system-fixes.sh` adds it during install:
+
+1. mount the btrfs top level (`subvolid=5`) and `btrfs subvolume create @snapshots`,
+2. append `UUID=<ssd> /.snapshots btrfs … subvol=/@snapshots 0 0` to `/etc/fstab`,
+3. mount `/.snapshots`, then run `snapper create-config /`.
+
+Do **not** pre-create `/.snapshots` yourself. Resulting fstab (example, with
+`/home` on the HDD):
+
+```
+UUID=<ssd>  /            btrfs  rw,noatime,compress=zstd:3,subvol=/@           0 0
+UUID=<ssd>  /var/cache   btrfs  rw,noatime,compress=zstd:3,subvol=/@cache      0 0
+UUID=<ssd>  /var/log     btrfs  rw,noatime,compress=zstd:3,subvol=/@log        0 0
+UUID=<ssd>  /.snapshots  btrfs  rw,noatime,compress=zstd:3,subvol=/@snapshots  0 0
+UUID=<hdd>  /home        ext4   rw,noatime                                     0 0
+```
+
+### Manual btrfs (alternative)
+
+If you partition outside Calamares, create `@` and `@snapshots` up front:
 
 ```sh
 # from the live ISO; SSD = /dev/sda2
@@ -65,18 +93,14 @@ mkdir /mnt/.snapshots
 mount -o subvol=@snapshots,compress=zstd:3,noatime /dev/sda2 /mnt/.snapshots
 ```
 
-Relevant `/etc/fstab` lines:
-
-```
-UUID=<ssd>  /            btrfs  rw,noatime,compress=zstd:3,subvol=@           0 0
-UUID=<ssd>  /.snapshots  btrfs  rw,noatime,compress=zstd:3,subvol=@snapshots  0 0
-UUID=<hdd>  /home        ext4   rw,noatime                                    0 0
-```
+### Snapshots
 
 If `/` is btrfs, `lib/system-fixes.sh` creates the snapper `root` config (+
 `snap-pac` hooks), sets retention (5 hourly / 7 daily / 4 weekly / 2 monthly),
 enables `snapper-timeline.timer`, `snapper-cleanup.timer`, `btrfs-scrub.timer`
-(trim left to `fstrim.timer`), and writes `/etc/snapper-rollback.conf`.
+(trim left to `fstrim.timer`), and writes `/etc/snapper-rollback.conf` **only if**
+`/.snapshots` is the real `@snapshots` subvolume (otherwise it falls back to
+live-USB `snapper rollback`).
 
 **Snapshots cover `/` only** — `/home` is on the HDD (ext4). Snapshots also live
 on the same disk they protect, so they are **not backups**.

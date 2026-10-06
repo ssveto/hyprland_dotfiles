@@ -122,6 +122,70 @@ zram_activate() {
 }
 
 # ---------------------------------------------------------------------------
+# Calamares creates @ / @home / @cache / @log but not @snapshots. Create it (and
+# the fstab entry) so snapper-rollback's flat layout works. Returns 0 when the
+# flat layout is available, 1 otherwise.
+snapshots_is_flat() {
+    mountpoint -q /.snapshots 2>/dev/null \
+        && findmnt -no OPTIONS /.snapshots 2>/dev/null | grep -q 'subvol=/@snapshots'
+}
+
+ensure_snapshots_subvolume() {
+    if snapshots_is_flat; then
+        note "@snapshots already mounted at /.snapshots"
+        return 0
+    fi
+
+    # A nested .snapshots (from a previous snapper run) cannot be converted here.
+    if [ -d /.snapshots ] && ! mountpoint -q /.snapshots 2>/dev/null; then
+        warn "/.snapshots exists but is not the @snapshots subvolume; leaving it as-is"
+        return 1
+    fi
+
+    local dev uuid
+    dev="$(findmnt -no SOURCE / 2>/dev/null || true)"
+    uuid="$(findmnt -no UUID / 2>/dev/null || true)"
+    if [ -z "$dev" ] || [ -z "$uuid" ]; then
+        warn "could not determine the root device/UUID; skipping @snapshots"
+        return 1
+    fi
+
+    say "Creating @snapshots subvolume (flat layout for snapper-rollback)"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "[dry-run] mount -o subvolid=5 $dev <tmp>"
+        note "[dry-run] btrfs subvolume create <tmp>/@snapshots"
+        note "[dry-run] /etc/fstab += UUID=$uuid /.snapshots btrfs rw,noatime,compress=zstd:3,subvol=/@snapshots 0 0"
+        note "[dry-run] mkdir -p /.snapshots && mount /.snapshots"
+        return 0
+    fi
+
+    local tmp
+    tmp="$(mktemp -d)"
+    if ! mount -o subvolid=5 "$dev" "$tmp"; then
+        warn "could not mount the btrfs top level; skipping @snapshots"
+        rmdir "$tmp" 2>/dev/null || true
+        return 1
+    fi
+    if [ ! -d "$tmp/@snapshots" ]; then
+        btrfs subvolume create "$tmp/@snapshots" || warn "could not create @snapshots"
+    fi
+    umount "$tmp" || true
+    rmdir "$tmp" 2>/dev/null || true
+
+    if ! grep -q 'subvol=/@snapshots' /etc/fstab 2>/dev/null; then
+        backup_file /etc/fstab
+        printf 'UUID=%s /.snapshots btrfs rw,noatime,compress=zstd:3,subvol=/@snapshots 0 0\n' "$uuid" >> /etc/fstab
+    fi
+
+    mkdir -p /.snapshots
+    if mount /.snapshots; then
+        return 0
+    fi
+    warn "could not mount /.snapshots now (fstab entry added; it mounts on boot)"
+    return 1
+}
+
+# ---------------------------------------------------------------------------
 snapper_configure() {
     local rootfs
     rootfs="$(findmnt -no FSTYPE / 2>/dev/null || true)"
@@ -136,16 +200,19 @@ snapper_configure() {
 
     say "Configuring btrfs snapshots (snapper)"
 
-    # Flat layout (@ + @snapshots) is created by the installer.
     if [ -f /etc/snapper/configs/root ]; then
         note "snapper 'root' config already exists — skipping creation"
-    else
+        ensure_snapshots_subvolume || true
+    elif ensure_snapshots_subvolume; then
         if ! run "${SUDO[@]}" snapper -c root create-config /; then
             warn "snapper create-config failed; falling back to the default template"
             run "${SUDO[@]}" mkdir -p /etc/snapper/configs
             run "${SUDO[@]}" cp /etc/snapper/config-templates/default /etc/snapper/configs/root
             run "${SUDO[@]}" sed -i 's#^SUBVOLUME=.*#SUBVOLUME="/"#' /etc/snapper/configs/root
         fi
+    else
+        warn "flat @snapshots unavailable — skipping snapper config creation (re-run after reboot)"
+        return 0
     fi
 
     backup_file /etc/snapper/configs/root
@@ -178,13 +245,14 @@ snapper_configure() {
     fi
 
     if pacman -Qq snapper-rollback >/dev/null 2>&1; then
-        local dev
-        dev="$(findmnt -no SOURCE / 2>/dev/null || true)"
-        if [ "$DRY_RUN" -eq 1 ]; then
-            note "[dry-run] write /etc/snapper-rollback.conf (dev=${dev:-?})"
-        elif [ -n "$dev" ]; then
-            if [ -e /etc/snapper-rollback.conf ]; then backup_file /etc/snapper-rollback.conf; fi
-            cat > /etc/snapper-rollback.conf <<EOF
+        if snapshots_is_flat || [ "$DRY_RUN" -eq 1 ]; then
+            local dev
+            dev="$(findmnt -no SOURCE / 2>/dev/null || true)"
+            if [ "$DRY_RUN" -eq 1 ]; then
+                note "[dry-run] write /etc/snapper-rollback.conf (dev=${dev:-?})"
+            elif [ -n "$dev" ]; then
+                if [ -e /etc/snapper-rollback.conf ]; then backup_file /etc/snapper-rollback.conf; fi
+                cat > /etc/snapper-rollback.conf <<EOF
 # Roll back with:  sudo snapper-rollback <snapid>
 [root]
 subvol_main = @
@@ -192,6 +260,9 @@ subvol_snapshots = @snapshots
 mountpoint = /btrfsroot
 dev = $dev
 EOF
+            fi
+        else
+            note "snapper-rollback config skipped (/.snapshots is not the @snapshots subvolume)"
         fi
     fi
 
