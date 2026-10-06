@@ -213,6 +213,7 @@ xorg-xwayland
 xterm
 yay
 zoxide
+zram-generator
 zsh
 zsh-autosuggestions
 zsh-completions

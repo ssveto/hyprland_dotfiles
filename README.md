@@ -98,9 +98,11 @@ management, which can freeze the system. The script:
    `med_power_with_dipm`),
 2. installs a **udev rule** forcing `link_power_management_policy=max_performance`
    (catches hotplug/resume) and triggers it at runtime,
-3. sets **`vm.swappiness=100`**. Swap here is **zram-only**, so a high value
-   (prefer fast compressed RAM swap) is correct; this is *not* the usual "10 for
-   an HDD swap" advice,
+3. provisions **zram swap** (`/etc/systemd/zram-generator.conf`:
+   `min(ram/2, 4096)`, `zstd`, priority 100) and then sets
+   **`vm.swappiness=100`**. Swap here is **zram-only**, so a high value (prefer
+   fast compressed RAM swap) is correct; this is *not* the usual "10 for an HDD
+   swap" advice,
 4. runs **`reinstall-kernels`** (only if the cmdline changed) to regenerate the
    systemd-boot entries.
 
@@ -144,7 +146,8 @@ cd "$(chezmoi source-path)" && git add -A && git commit -m "..."
   `recently_used.json`, `instance.id`, `state.toml`)
 - Downloaded/community Noctalia templates and palettes
 - Old backups (`~/.config/noctalia/backup-*`)
-- The wallpaper pack (`~/Pictures/walls-catppuccin-mocha-master`, ~396 MB)
+- The wallpaper pack (`~/Pictures/walls-catppuccin-mocha-master`, ~396 MB) —
+  optional; a default wallpaper ships in `~/.local/share/wallpapers/`
 
 ## Regenerating package lists
 

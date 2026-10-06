@@ -191,13 +191,29 @@ vm.swappiness=100
 EOF
     fi
 
-    # 4) Apply what can be applied at runtime --------------------------------
+    # 4) zram swap: the machine's only swap is zram, so swappiness=100 above
+    #    is meaningful only once this config exists.
+    local zram_conf="/etc/systemd/zram-generator.conf"
+    if [ -f "$zram_conf" ] && "${SUDO[@]}" grep -qE '^\[zram0\]' "$zram_conf"; then
+        note "zram-generator already configured — skipping"
+    else
+        note "writing $zram_conf"
+        write_root_file "$zram_conf" <<'EOF'
+# Compressed RAM swap. zram-size = min(ram/2, 4096) -> 4 GiB on an 8 GiB box.
+[zram0]
+zram-size = min(ram / 2, 4096)
+compression-algorithm = zstd
+swap-priority = 100
+EOF
+    fi
+
+    # 5) Apply what can be applied at runtime --------------------------------
     say "Applying udev + sysctl at runtime"
     run "${SUDO[@]}" udevadm control --reload-rules
     run "${SUDO[@]}" udevadm trigger --subsystem-match=scsi_host --action=add
     run "${SUDO[@]}" sysctl --system
 
-    # 5) Regenerate boot entries if the cmdline changed ----------------------
+    # 6) Regenerate boot entries if the cmdline changed ----------------------
     if [ "$cmdline_changed" -eq 1 ]; then
         if command -v reinstall-kernels >/dev/null 2>&1; then
             say "Regenerating boot entries (reinstall-kernels)"
@@ -218,6 +234,26 @@ EOF
         if [ -r "$h" ]; then note "$(basename "$(dirname "$h")") = $(cat "$h")"; fi
     done
     note "The cmdline param takes effect after a reboot."
+}
+
+# ---------------------------------------------------------------------------
+# zram activation (run after zram-generator is installed)
+# ---------------------------------------------------------------------------
+activate_zram() {
+    if ! pacman -Qq zram-generator >/dev/null 2>&1; then
+        note "zram-generator not installed yet; it will activate after packages are installed"
+        return 0
+    fi
+    say "Activating zram swap"
+    run "${SUDO[@]}" systemctl daemon-reload
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "[dry-run] systemctl start systemd-zram-setup@zram0.service"
+    else
+        "${SUDO[@]}" systemctl start systemd-zram-setup@zram0.service 2>/dev/null \
+            || note "zram unit did not start now; it will come up on next boot"
+    fi
+    note "swap devices:"
+    swapon --show 2>/dev/null | sed 's/^/      /' || true
 }
 
 # ---------------------------------------------------------------------------
@@ -388,13 +424,15 @@ EOF
 # Main
 # ---------------------------------------------------------------------------
 if [ "$SKIP_STORAGE" -eq 0 ]; then STORAGE_FIX; fi
-if [ "$STORAGE_ONLY" -eq 1 ]; then exit 0; fi
+if [ "$STORAGE_ONLY" -eq 1 ]; then activate_zram; exit 0; fi
 
 if [ "$SKIP_PACKAGES" -eq 0 ]; then
     install_packages
 else
     note "package installation skipped (--skip-packages)"
 fi
+
+activate_zram
 
 apply_dotfiles || warn "dotfiles step failed"
 
