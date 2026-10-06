@@ -89,17 +89,54 @@ cmdline_fix() {
     else
         warn "No /etc/kernel/cmdline or /etc/default/grub; add '$param' manually."
     fi
+}
 
-    if [ "$CMDLINE_CHANGED" -eq 1 ]; then
-        if command -v reinstall-kernels >/dev/null 2>&1; then
-            say "Regenerating boot entries (reinstall-kernels)"
-            run "${SUDO[@]}" reinstall-kernels || warn "reinstall-kernels failed"
-        elif command -v grub-mkconfig >/dev/null 2>&1; then
-            say "Regenerating GRUB config"
-            run "${SUDO[@]}" grub-mkconfig -o /boot/grub/grub.cfg || warn "grub-mkconfig failed"
-        else
-            warn "Cmdline changed but no boot-entry regenerator found; reboot manually."
+# ---------------------------------------------------------------------------
+plymouth_fix() {
+    if ! pacman -Qq plymouth >/dev/null 2>&1; then
+        return 0
+    fi
+    # The theme is set by etc/plymouth/plymouthd.conf (deployed via rsync);
+    # the initrd must be rebuilt so plymouth + theme are embedded.
+    REGEN=1
+
+    local cmdline_file="/etc/kernel/cmdline"
+    local grub_file="/etc/default/grub"
+    if [ -f "$cmdline_file" ]; then
+        if ! grep -qE '(^| )splash( |$)' "$cmdline_file"; then
+            note "adding 'splash' to $cmdline_file"
+            backup_file "$cmdline_file"
+            if [ "$DRY_RUN" -eq 1 ]; then
+                note "[dry-run] append ' splash'"
+            else
+                printf ' splash' >> "$cmdline_file"
+            fi
+            CMDLINE_CHANGED=1
         fi
+    elif [ -f "$grub_file" ]; then
+        if ! grep -qE '(^| )splash( |$)' "$grub_file"; then
+            note "adding 'splash' to GRUB_CMDLINE_LINUX_DEFAULT"
+            backup_file "$grub_file"
+            run "${SUDO[@]}" sed -i -E 's/^(GRUB_CMDLINE_LINUX_DEFAULT="[^"]*)"/\1 splash"/' "$grub_file"
+            CMDLINE_CHANGED=1
+        fi
+    fi
+    note "Plymouth theme 'bgrt' configured (initrd rebuild scheduled)"
+}
+
+# ---------------------------------------------------------------------------
+regenerate_boot() {
+    if [ "${CMDLINE_CHANGED:-0}" -ne 1 ] && [ "${REGEN:-0}" -ne 1 ]; then
+        return 0
+    fi
+    if command -v reinstall-kernels >/dev/null 2>&1; then
+        say "Regenerating boot entries (reinstall-kernels)"
+        run "${SUDO[@]}" reinstall-kernels || warn "reinstall-kernels failed"
+    elif command -v grub-mkconfig >/dev/null 2>&1; then
+        say "Regenerating GRUB config"
+        run "${SUDO[@]}" grub-mkconfig -o /boot/grub/grub.cfg || warn "grub-mkconfig failed"
+    else
+        warn "Boot entries changed but no regenerator found; reboot manually."
     fi
 }
 
@@ -272,12 +309,14 @@ EOF
 
 # ---------------------------------------------------------------------------
 system_fixes() {
-    say "System fixes (SATA/ALPM, zram, snapshots)"
+    say "System fixes (SATA/ALPM, plymouth, zram, snapshots)"
     cmdline_fix
+    plymouth_fix
     say "Applying udev + sysctl"
     run "${SUDO[@]}" udevadm control --reload-rules
     run "${SUDO[@]}" udevadm trigger --subsystem-match=scsi_host --action=add
     run "${SUDO[@]}" sysctl --system
     zram_activate
     snapper_configure
+    regenerate_boot
 }

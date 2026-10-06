@@ -136,6 +136,21 @@ grep -o 'ahci.mobile_lpm_policy=[0-9]*' /proc/cmdline
 cat /sys/class/scsi_host/host*/link_power_management_policy   # -> max_performance
 ```
 
+## Boot splash (Plymouth)
+
+`plymouth` is installed and configured with the built-in **`bgrt`** theme
+(firmware boot logo + spinner) via `etc/plymouth/plymouthd.conf`. The installer
+ensures `splash` is on the kernel cmdline and regenerates the initrd, so the
+splash is embedded out of the box (dracut's `45plymouth` module is pulled in
+automatically whenever plymouth is installed — no dracut config needed).
+
+Change the theme later:
+
+```sh
+sudo plymouth-set-default-theme -R spinner   # rebuilds the initrd
+# or edit /etc/plymouth/plymouthd.conf and re-run: sudo reinstall-kernels
+```
+
 ## Desktop design
 
 - **Noctalia** owns the bar, launcher, control center, notifications, lock/idle,
