@@ -90,3 +90,15 @@ end    = ["media", "tray", "notifications", "clipboard", "network", "bluetooth",
 # The local sway-keybinds plugin was retired with the move to Hyprland.
 [widget.keybinds]
 type = "kenn/keybind-cheatsheet:keybinds"
+
+# Plugin enablement + settings live here (not in the GUI-managed settings.toml)
+# so they survive Noctalia rewriting its state and installer re-runs.
+[plugins]
+enabled = [ "kenn/keybind-cheatsheet" ]
+
+# Parse the classic keybinds.conf instead of scanning hyprland.lua, whose Lua
+# scan exceeds Noctalia's Luau CPU budget and leaves the panel stuck.
+[plugin_settings."kenn/keybind-cheatsheet"]
+compositor = "hyprland"
+hyprland_parser = "conf"
+hyprland_config = "~/.config/hypr/keybinds.conf"

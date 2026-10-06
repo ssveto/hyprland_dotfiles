@@ -5,11 +5,11 @@
 
 list_file() { grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$1"; }
 
-# Apply a dconf key to the target user's *live* session. On Wayland, GTK apps
-# (and Noctalia) resolve icons/theme through the XSettings portal backed by the
-# user's dconf, so ~/.config/gtk-3.0/settings.ini alone is not always honoured.
-# Best-effort: skip quietly when the user's session bus is not reachable (e.g.
-# installing from a TTY before first login).
+# Apply a dconf key to the target user. On Wayland, GTK apps (and Noctalia)
+# resolve icons/theme through the XSettings portal backed by the user's dconf,
+# so ~/.config/gtk-3.0/settings.ini alone is not always honoured. Uses the live
+# session bus when available, otherwise a throwaway private bus so this also
+# works from the Calamares chroot or a TTY before first login. Best-effort.
 set_user_dconf() {
     local username="$1" schema="$2" key="$3" value="$4"
     local uid rt home
@@ -20,13 +20,20 @@ set_user_dconf() {
         note "[dry-run] gsettings set $schema $key '$value' (as $username)"
         return 0
     fi
-    if [ ! -S "$rt/bus" ]; then
-        note "user session bus not running; $schema $key will apply on next login"
-        return 0
+    if [ -S "$rt/bus" ]; then
+        runuser -u "$username" -- env HOME="$home" XDG_RUNTIME_DIR="$rt" \
+            DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus" \
+            gsettings set "$schema" "$key" "$value" \
+            || warn "could not set $schema $key"
+    elif command -v dbus-run-session >/dev/null 2>&1; then
+        local -a env_args=(HOME="$home")
+        if [ -d "$rt" ]; then env_args+=("XDG_RUNTIME_DIR=$rt"); fi
+        runuser -u "$username" -- env "${env_args[@]}" \
+            dbus-run-session -- gsettings set "$schema" "$key" "$value" \
+            || warn "could not set $schema $key"
+    else
+        note "no session bus / dbus-run-session; set $schema $key manually"
     fi
-    runuser -u "$username" -- env HOME="$home" XDG_RUNTIME_DIR="$rt" \
-        DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus" \
-        gsettings set "$schema" "$key" "$value" || warn "could not set $schema $key"
 }
 
 install_aur_pkgs() {
@@ -81,6 +88,14 @@ deploy_desktop() {
     say "Installing repo packages (${#pkgs[@]})"
     run "${SUDO[@]}" pacman -S --noconfirm --needed --disable-download-timeout "${pkgs[@]}"
 
+    # eos-qogir-icons is only in the EndeavourOS repo (Qogir cursor theme).
+    # Best-effort, so the same script still runs on vanilla Arch, where the
+    # desktop just falls back to the default cursor theme.
+    if ! pacman -Qq eos-qogir-icons >/dev/null 2>&1; then
+        run "${SUDO[@]}" pacman -S --noconfirm --needed --disable-download-timeout eos-qogir-icons \
+            || note "eos-qogir-icons unavailable (non-EndeavourOS?); default cursor theme will be used"
+    fi
+
     install_aur_pkgs "$username" "$repo/packages-aur.txt"
 
     # Default login shell -> zsh. The shipped .zshrc/.zprofile are only read
@@ -95,9 +110,18 @@ deploy_desktop() {
 
     say "Deploying user configs to /home/$username"
     run "${SUDO[@]}" rsync -a "$repo/.config/" "/home/$username/.config/"
-    run "${SUDO[@]}" rsync -a "$repo/home_config/" "/home/$username/"
+    # settings.toml is Noctalia's GUI-managed state (wallpaper, lockscreen
+    # widgets, …): seed it only when missing so re-running never clobbers the
+    # user's choices. Plugin enablement/settings live in config.toml, which is
+    # merged and safe to overwrite.
+    run "${SUDO[@]}" rsync -a --exclude '.local/state/noctalia/settings.toml' \
+        "$repo/home_config/" "/home/$username/"
+    run "${SUDO[@]}" mkdir -p "/home/$username/.local/state/noctalia"
+    run "${SUDO[@]}" rsync -a --ignore-existing \
+        "$repo/home_config/.local/state/noctalia/settings.toml" \
+        "/home/$username/.local/state/noctalia/settings.toml"
     if [ "$DRY_RUN" -eq 1 ]; then
-        note "[dry-run] substitute __HOME__ / __OUTPUT__ in settings.toml"
+        note "[dry-run] substitute __HOME__ / __OUTPUT__ in settings.toml (if seeded)"
     else
         sed -i "s|__HOME__|/home/$username|g; s|__OUTPUT__|DP-3|g" \
             "/home/$username/.local/state/noctalia/settings.toml"

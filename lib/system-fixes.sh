@@ -218,6 +218,11 @@ root_fs_info() {
     if [ -z "$ROOT_UUID" ] && [ -n "$ROOT_DEV" ]; then
         ROOT_UUID="$(blkid -s UUID -o value "$ROOT_DEV" 2>/dev/null || true)"
     fi
+    # Reverse lookup: in the Calamares chroot /dev/disk/by-uuid may be missing,
+    # so resolve the device from the UUID via blkid as a fallback.
+    if [ -z "$ROOT_DEV" ] && [ -n "$ROOT_UUID" ]; then
+        ROOT_DEV="$(blkid -U "$ROOT_UUID" 2>/dev/null || true)"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -280,8 +285,11 @@ ensure_snapshots_subvolume() {
     if mount /.snapshots; then
         return 0
     fi
-    warn "could not mount /.snapshots now (fstab entry added; it mounts on boot)"
-    return 1
+    # The subvolume and the fstab entry exist, so it mounts on boot. Still
+    # return success so the snapper config gets seeded/registered for first boot
+    # (this is the expected path inside the Calamares chroot).
+    warn "could not mount /.snapshots now; it will mount on boot"
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -326,6 +334,29 @@ snapper_seed() {
     run "${SUDO[@]}" sed -i 's#^SUBVOLUME=.*#SUBVOLUME="/"#' "/etc/snapper/configs/$name"
 }
 
+# Set snapper config values by editing the config file directly. This avoids
+# `snapper set-config`, which needs a running snapperd (absent inside the
+# Calamares chroot) and has its own config-discovery quirks.
+snapper_config_set() {
+    local name="$1"; shift
+    local file="/etc/snapper/configs/$name" kv key val
+    if [ ! -f "$file" ]; then
+        warn "snapper config $file missing; cannot set values"
+        return 0
+    fi
+    backup_file "$file"
+    for kv in "$@"; do
+        key="${kv%%=*}"; val="${kv#*=}"
+        if grep -qE "^${key}=" "$file"; then
+            run "${SUDO[@]}" sed -i -E "s#^${key}=.*#${key}=\"${val}\"#" "$file"
+        elif [ "$DRY_RUN" -eq 1 ]; then
+            note "[dry-run] add ${key}=\"${val}\" to $file"
+        else
+            printf '%s="%s"\n' "$key" "$val" >> "$file"
+        fi
+    done
+}
+
 # ---------------------------------------------------------------------------
 snapper_configure() {
     root_fs_info
@@ -351,9 +382,7 @@ snapper_configure() {
     fi
     snapper_register root
 
-    backup_file /etc/snapper/configs/root
-    local kv
-    for kv in \
+    snapper_config_set root \
         TIMELINE_CREATE=yes \
         TIMELINE_LIMIT_HOURLY=5 \
         TIMELINE_LIMIT_DAILY=7 \
@@ -365,13 +394,13 @@ snapper_configure() {
         NUMBER_LIMIT_IMPORTANT=10 \
         SPACE_LIMIT=0.3 \
         FREE_LIMIT=0.2
-    do
-        # Never abort the install over a retention knob.
-        run "${SUDO[@]}" snapper -c root set-config "$kv" \
-            || warn "snapper set-config $kv failed"
-    done
 
-    run "${SUDO[@]}" systemctl enable --now snapper-timeline.timer snapper-cleanup.timer || true
+    # Enable always; start only on a live system (inside the chroot they come up
+    # on first boot).
+    run "${SUDO[@]}" systemctl enable snapper-timeline.timer snapper-cleanup.timer || true
+    if [ "$ISOMODE" -ne 1 ]; then
+        run "${SUDO[@]}" systemctl start snapper-timeline.timer snapper-cleanup.timer || true
+    fi
 
     if pacman -Qq btrfsmaintenance >/dev/null 2>&1; then
         if [ -f /etc/default/btrfsmaintenance ] \
@@ -379,11 +408,15 @@ snapper_configure() {
             backup_file /etc/default/btrfsmaintenance
             run "${SUDO[@]}" sed -i 's/^BTRFS_TRIM_PERIOD=.*/BTRFS_TRIM_PERIOD="none"/' /etc/default/btrfsmaintenance
         fi
-        run "${SUDO[@]}" systemctl enable --now btrfs-scrub.timer || true
+        run "${SUDO[@]}" systemctl enable btrfs-scrub.timer || true
+        if [ "$ISOMODE" -ne 1 ]; then
+            run "${SUDO[@]}" systemctl start btrfs-scrub.timer || true
+        fi
     fi
 
     if pacman -Qq snapper-rollback >/dev/null 2>&1; then
-        if snapshots_is_flat || [ "$DRY_RUN" -eq 1 ]; then
+        if snapshots_is_flat || grep -q 'subvol=/@snapshots' /etc/fstab 2>/dev/null \
+           || [ "$DRY_RUN" -eq 1 ]; then
             local dev
             dev="$ROOT_DEV"
             if [ "$DRY_RUN" -eq 1 ]; then

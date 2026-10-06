@@ -1,19 +1,15 @@
 config_version = 14
 
-# NOTE: do not ship a [lockscreen_widgets] section here. Noctalia regenerates
-# that state itself; seeding it makes Noctalia append its own copy on the next
-# external change and the file then fails to parse ("cannot redefine existing
-# table lockscreen_widgets..."). Let Noctalia own it.
-
-[plugins]
-enabled = [ "kenn/keybind-cheatsheet" ]
-
-# Cheatsheet plugin: parse the classic keybinds.conf instead of scanning
-# hyprland.lua, whose Lua scan exceeds Noctalia's Luau CPU budget.
-[plugin_settings."kenn/keybind-cheatsheet"]
-compositor = "hyprland"
-hyprland_parser = "conf"
-hyprland_config = "__HOME__/.config/hypr/keybinds.conf"
+# Noctalia's GUI-managed state. Seeded only on first install (the installer uses
+# rsync --ignore-existing) so re-running never clobbers the user's wallpaper etc.
+#
+# NOTE: do not ship a [lockscreen_widgets] section here — Noctalia regenerates
+# that state itself, and seeding it makes Noctalia append its own copy on the
+# next external change, after which the file fails to parse ("cannot redefine
+# existing table lockscreen_widgets..."). Let Noctalia own it.
+#
+# Plugin enablement and plugin_settings live in ~/.config/noctalia/config.toml
+# (merged, safe to overwrite), not here.
 
 [shell]
 telemetry_enabled = false

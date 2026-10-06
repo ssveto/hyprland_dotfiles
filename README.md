@@ -37,6 +37,7 @@ Reboot and pick **Hyprland** at the ReGreet login screen.
 | Path | Deployed to | Notes |
 | --- | --- | --- |
 | `.config/` | `~/.config/` | Hyprland, Noctalia, foot, fuzzel, GTK, portals, user units |
+| `.config/hypr/keybinds.conf` | `~/.config/hypr/` | keybind reference parsed by the cheatsheet plugin (mirrors `hyprland.lua`) |
 | `home_config/` | `~/` | `.zshrc`, `.zprofile`, `.gitconfig`, wallpapers, Noctalia settings |
 | `etc/` | `/etc/` | greetd, zram, swappiness, udev rule |
 | `packages-repository.txt` | — | repo packages |
@@ -156,6 +157,10 @@ sudo plymouth-set-default-theme -R spinner   # rebuilds the initrd
 - **Noctalia** owns the bar, launcher, control center, notifications, lock/idle,
   clipboard, wallpaper and theming; the `kenn/keybind-cheatsheet` community
   plugin replaces the old Sway keybinds widget.
+  Its Hyprland-**Lua** mode currently blows Noctalia's Luau CPU budget on
+  `hyprland.lua` (the panel sticks on "Reading keybindings…"), so the plugin is
+  configured in `~/.config/noctalia/config.toml` to parse `keybinds.conf`
+  instead. Keep that file in sync with `hyprland.lua` when binds change.
 - **Animations on, kept lean**: popin windows, fading layers, sliding
   workspaces. Compositor **blur and shadows are off**, rounding is modest.
 - **Super+F** = Hyprland native *maximize* (`fullscreen mode = maximized`);
