@@ -8,11 +8,11 @@
 #
 # Run it as your normal user (it calls sudo where needed):
 #
-#   git clone https://github.com/ssveto/sway_dotfiles.git ~/.local/share/chezmoi
+#   git clone https://github.com/ssveto/hyprland_dotfiles.git ~/.local/share/chezmoi
 #   cd ~/.local/share/chezmoi && ./bootstrap-arch.sh
 #
 #   # ...or clone anywhere and point the script at the repo:
-#   ./bootstrap-arch.sh --repo https://github.com/ssveto/sway_dotfiles.git
+#   ./bootstrap-arch.sh --repo https://github.com/ssveto/hyprland_dotfiles.git
 #
 # Options:
 #   -r, --repo URL      chezmoi repo to clone + apply (default: run from source)

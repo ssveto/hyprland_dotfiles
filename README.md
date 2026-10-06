@@ -14,7 +14,7 @@ files there by hand unless you mean to change the template itself.
 ## Quick start (fresh Arch)
 
 ```sh
-git clone https://github.com/ssveto/sway_dotfiles.git ~/.local/share/chezmoi
+git clone https://github.com/ssveto/hyprland_dotfiles.git ~/.local/share/chezmoi
 cd ~/.local/share/chezmoi
 ./bootstrap-arch.sh
 ```
