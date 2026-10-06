@@ -257,6 +257,95 @@ activate_zram() {
 }
 
 # ---------------------------------------------------------------------------
+# btrfs snapshots (only when / is btrfs)
+# ---------------------------------------------------------------------------
+configure_btrfs_snapshots() {
+    local rootfs
+    rootfs="$(findmnt -no FSTYPE / 2>/dev/null || true)"
+    if [ "$rootfs" != "btrfs" ]; then
+        note "root filesystem is ${rootfs:-unknown}, not btrfs — skipping snapshot setup"
+        return 0
+    fi
+    if ! pacman -Qq snapper >/dev/null 2>&1; then
+        note "snapper not installed; skipping snapshot setup"
+        return 0
+    fi
+
+    say "Configuring btrfs snapshots (snapper)"
+
+    # 1) config + /.snapshots. The install-time flat layout (@ + @snapshots)
+    #    means /.snapshots already exists as its own subvolume.
+    if [ -f /etc/snapper/configs/root ]; then
+        note "snapper 'root' config already exists — skipping creation"
+    else
+        if ! run "${SUDO[@]}" snapper -c root create-config /; then
+            warn "snapper create-config failed; falling back to the default template"
+            run "${SUDO[@]}" mkdir -p /etc/snapper/configs
+            run "${SUDO[@]}" cp /etc/snapper/config-templates/default /etc/snapper/configs/root
+            run "${SUDO[@]}" sed -i 's#^SUBVOLUME=.*#SUBVOLUME="/"#' /etc/snapper/configs/root
+        fi
+    fi
+
+    # 2) retention so snapshots can never fill the SSD
+    backup_file /etc/snapper/configs/root
+    local kv
+    for kv in \
+        TIMELINE_CREATE=yes \
+        TIMELINE_LIMIT_HOURLY=5 \
+        TIMELINE_LIMIT_DAILY=7 \
+        TIMELINE_LIMIT_WEEKLY=4 \
+        TIMELINE_LIMIT_MONTHLY=2 \
+        TIMELINE_LIMIT_YEARLY=0 \
+        NUMBER_CLEANUP=yes \
+        NUMBER_LIMIT=20 \
+        NUMBER_LIMIT_IMPORTANT=10 \
+        SPACE_LIMIT=0.3 \
+        FREE_LIMIT=0.2
+    do
+        run "${SUDO[@]}" snapper -c root set-config "$kv"
+    done
+
+    # 3) timeline + cleanup timers (snap-pac's pacman hooks need no timer)
+    run "${SUDO[@]}" systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
+
+    # 4) btrfs scrub; trim is left to fstrim.timer
+    if pacman -Qq btrfsmaintenance >/dev/null 2>&1; then
+        if [ -f /etc/default/btrfsmaintenance ] \
+           && ! "${SUDO[@]}" grep -q '^BTRFS_TRIM_PERIOD="none"' /etc/default/btrfsmaintenance; then
+            backup_file /etc/default/btrfsmaintenance
+            run "${SUDO[@]}" sed -i 's/^BTRFS_TRIM_PERIOD=.*/BTRFS_TRIM_PERIOD="none"/' /etc/default/btrfsmaintenance
+        fi
+        run "${SUDO[@]}" systemctl enable --now btrfs-scrub.timer
+    fi
+
+    # 5) snapper-rollback needs the flat layout (@ + @snapshots)
+    if pacman -Qq snapper-rollback >/dev/null 2>&1; then
+        local dev
+        dev="$(findmnt -no SOURCE / 2>/dev/null || true)"
+        if [ -n "$dev" ]; then
+            write_root_file /etc/snapper-rollback.conf <<EOF
+# Roll back with:  sudo snapper-rollback <snapid>
+[root]
+subvol_main = @
+subvol_snapshots = @snapshots
+mountpoint = /btrfsroot
+dev = $dev
+EOF
+        else
+            write_root_file /etc/snapper-rollback.conf <<'EOF'
+[root]
+subvol_main = @
+subvol_snapshots = @snapshots
+mountpoint = /btrfsroot
+EOF
+        fi
+    fi
+
+    note "snapshots:"
+    snapper -c root list 2>/dev/null | tail -n 5 | sed 's/^/      /' || true
+}
+
+# ---------------------------------------------------------------------------
 # Packages
 # ---------------------------------------------------------------------------
 install_packages() {
@@ -433,6 +522,7 @@ else
 fi
 
 activate_zram
+configure_btrfs_snapshots
 
 apply_dotfiles || warn "dotfiles step failed"
 

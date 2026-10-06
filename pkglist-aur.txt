@@ -1,2 +1,3 @@
 # Foreign/AUR packages captured from the original machine.
 github-desktop-bin
+snapper-rollback

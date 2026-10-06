@@ -25,7 +25,9 @@ to `/var/tmp/opencode-fixes/backup-<timestamp>/` and:
 1. applies the **SATA/ALPM + zram fixes** (see below),
 2. installs the recorded repo packages (unavailable/EOL packages are skipped),
 3. installs + applies these dotfiles through chezmoi,
-4. configures **greetd + ReGreet**.
+4. configures **greetd + ReGreet**,
+5. configures **btrfs snapshots** (snapper) if `/` is btrfs — see
+   *Fresh install: filesystem & snapshots* below.
 
 Useful flags: `--dry-run`, `--skip-storage`, `--storage-only`,
 `--skip-packages`, `--skip-aur`, `--no-upgrade`, `-y`.
@@ -46,6 +48,47 @@ Useful flags: `--dry-run`, `--skip-storage`, `--storage-only`,
 | `~/.config/gtk-3.0/`, `~/.config/gtk-4.0/` | Generated GTK theme + `settings.ini` |
 | `~/.zshrc`, `~/.zprofile` | Shell config (completion, history, fzf, zoxide, starship) |
 | `~/.gitconfig` | Git identity + lfs filter |
+
+## Fresh install: filesystem & snapshots
+
+The installer (not this repo) creates the filesystems. For **`/` use btrfs on
+the SSD** with a flat subvolume layout, so snapper snapshots and
+`snapper-rollback` work:
+
+```sh
+# from the live ISO; SSD = /dev/sda2
+mkfs.btrfs -L arch /dev/sda2
+mount /dev/sda2 /mnt
+btrfs subvolume create /mnt/@
+btrfs subvolume create /mnt/@snapshots
+mount -o subvol=@,compress=zstd:3,noatime /dev/sda2 /mnt
+mkdir /mnt/.snapshots
+mount -o subvol=@snapshots,compress=zstd:3,noatime /dev/sda2 /mnt/.snapshots
+```
+
+Relevant `/etc/fstab` lines:
+
+```
+UUID=<ssd>  /            btrfs  rw,noatime,compress=zstd:3,subvol=@           0 0
+UUID=<ssd>  /.snapshots  btrfs  rw,noatime,compress=zstd:3,subvol=@snapshots  0 0
+UUID=<hdd>  /home        ext4   rw,noatime                                    0 0
+```
+
+`bootstrap-arch.sh` then — **only if `/` is btrfs** — creates the snapper `root`
+config (plus `snap-pac` hooks for automatic pre/post-`pacman` snapshots), sets
+retention (5 hourly / 7 daily / 4 weekly / 2 monthly), enables
+`snapper-timeline.timer`, `snapper-cleanup.timer` and `btrfs-scrub.timer`, and
+writes `/etc/snapper-rollback.conf`.
+
+### Snapshots cover `/` only
+
+`/home` is on the HDD (ext4), so it is **not** snapshotted. Snapshots also live
+on the same disk they protect, so they are **not backups**.
+
+- List: `sudo snapper -c root list`
+- Roll back: `sudo snapper-rollback <snapid>` (reboot afterwards), or from a
+  live ISO: `sudo snapper rollback <snapid>`
+- **Back `/home` up off-machine** — the Hitachi HDD has ~44,886 power-on hours.
 
 ## Desktop design
 

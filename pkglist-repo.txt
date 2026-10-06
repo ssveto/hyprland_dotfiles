@@ -19,6 +19,7 @@ bluez-utils
 brightnessctl
 btop
 btrfs-progs
+btrfsmaintenance
 cantarell-fonts
 chezmoi
 cryptsetup
@@ -162,6 +163,8 @@ s-nail
 sg3_utils
 slurp
 smartmontools
+snap-pac
+snapper
 sof-firmware
 starship
 sudo
