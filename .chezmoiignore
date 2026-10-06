@@ -3,7 +3,6 @@
 # excluded from `chezmoi status` / `chezmoi apply`.
 
 # Old / unused config backups kept on this machine
-.config/sway/backups
 .config/noctalia/backup-*
 
 # Noctalia runtime state that is regenerated or machine-specific
@@ -26,3 +25,4 @@ pkglist-repo.txt
 pkglist-aur.txt
 export-packages.sh
 install.sh
+bootstrap-arch.sh

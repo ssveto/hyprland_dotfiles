@@ -1,0 +1,11 @@
+[Unit]
+Description=Lock the Noctalia session before the system sleeps
+Before=sleep.target
+StopWhenUnneeded=yes
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/noctalia msg session lock
+
+[Install]
+WantedBy=sleep.target

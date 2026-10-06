@@ -4,13 +4,10 @@
 #   chezmoi init && chezmoi apply
 #
 # On a new PC, if the monitor name differs, copy it from:
-#   swaymsg -t get_outputs
-# and set `is_endeavouros = false` if it is not an EndeavourOS install.
+#   hyprctl monitors
+# and update `output` below.
 
 [data]
     # Primary monitor output name. Used by the Noctalia lockscreen widget
     # and the per-monitor wallpaper entry in settings.toml.
     output = "DP-3"
-
-    # EndeavourOS ships the eos-welcome app (auto-launched on login).
-    is_endeavouros = true

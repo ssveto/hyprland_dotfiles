@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # fzf-history.sh — fuzzy shell-history picker in a floating foot window.
 #
-# Bound to Super+r in sway (~/.config/sway/config.d/zz-user-binds).
+# Bound to Super+r in Hyprland (~/.config/hypr/hyprland.lua).
 # Reads zsh history (plus bash history, for the migration period), lets you
 # fuzzy-pick a command, then:
 #

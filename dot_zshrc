@@ -1,6 +1,6 @@
 # ~/.zshrc — zsh configuration
 # Completion, persistent shared history, fzf, and a few QoL plugins.
-# Companion: ~/.config/sway/scripts/fzf-history.sh  (Super+r popup)
+# Companion: ~/.config/hypr/scripts/fzf-history.sh  (Super+r popup)
 
 # ---------------------------------------------------------------------------
 # Environment
@@ -69,7 +69,7 @@ bindkey -e                 # emacs-style key bindings
 # ---------------------------------------------------------------------------
 # fzf
 # Ctrl-R: history   Ctrl-T: files   Alt-C: cd
-# Super+r opens the same history search in a floating foot window (sway).
+# Super+r opens the same history search in a floating foot window (Hyprland).
 # ---------------------------------------------------------------------------
 [[ -r /usr/share/fzf/key-bindings.zsh ]] && source /usr/share/fzf/key-bindings.zsh
 [[ -r /usr/share/fzf/completion.zsh   ]] && source /usr/share/fzf/completion.zsh

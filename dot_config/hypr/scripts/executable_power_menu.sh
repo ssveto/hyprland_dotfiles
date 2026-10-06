@@ -1,4 +1,5 @@
 #!/bin/bash
+# Noctalia power menu (Hyprland). Bound to Super+Shift+E.
 
 MENU="$(printf "󰌾 Lock\n󰤄 Suspend\n󰍃 Log out\n Reboot\n Reboot to UEFI\n󰐥 Shutdown")"
 if [[ "$(systemctl is-enabled suspend.target 2>/dev/null)" == "masked" ]]; then
@@ -23,7 +24,7 @@ case $SELECTION in
         fi;;
     *"󰍃 Log out"*)
         if confirm_action "Log out"; then
-            swaymsg exit
+            hyprctl dispatch exit
         fi;;
     *" Reboot"*)
         if confirm_action "Reboot"; then
