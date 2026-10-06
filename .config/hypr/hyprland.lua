@@ -136,8 +136,9 @@ hl.animation({ leaf = "workspaces",    enabled = true, speed = 4.0, bezier = "ea
 hl.animation({ leaf = "workspacesIn",  enabled = true, speed = 4.0, bezier = "easeOutQuint", style = "slide" })
 hl.animation({ leaf = "workspacesOut", enabled = true, speed = 4.0, bezier = "easeOutQuint", style = "slide" })
 
--- Keep empty workspaces visible in Noctalia's workspace indicator.
-for i = 1, 10 do
+-- Keep only the first three workspaces visible in Noctalia's workspace
+-- indicator while empty; the rest appear once they hold a window.
+for i = 1, 3 do
     hl.workspace_rule({ workspace = tostring(i), persistent = true })
 end
 
@@ -181,7 +182,7 @@ hl.bind(mainMod .. " + comma",  hl.dsp.exec_cmd(settingsPanel))
 hl.bind(mainMod .. " + SHIFT + D", hl.dsp.exec_cmd(launcher))
 hl.bind(mainMod .. " + F1",     hl.dsp.exec_cmd("noctalia msg session lock"))
 hl.bind(mainMod .. " + SHIFT + E", hl.dsp.exec_cmd(hypr_scripts .. "/power_menu.sh"))
-hl.bind(mainMod .. " + SHIFT + C", hl.dsp.reload_config())
+hl.bind(mainMod .. " + SHIFT + C", hl.dsp.exec_cmd("hyprctl reload"))
 
 -- Window switcher (Noctalia overlay); ALT+Tab mirrors the docs' "hold" action.
 hl.bind(mainMod .. " + P",  hl.dsp.exec_cmd(windowSwitcher))

@@ -190,6 +190,9 @@ root_fs_info() {
     ROOT_FSTYPE="$(findmnt -no FSTYPE / 2>/dev/null || true)"
     ROOT_UUID="$(findmnt -no UUID / 2>/dev/null || true)"
     ROOT_DEV="$(findmnt -no SOURCE / 2>/dev/null || true)"
+    # findmnt reports the source of a btrfs subvolume mount as
+    # "/dev/sda1[/@]"; the "[...]" suffix must go or mount(8) can't use it.
+    ROOT_DEV="${ROOT_DEV%%\[*}"
 
     case "$ROOT_FSTYPE" in
         "" | overlay | tmpfs) ROOT_FSTYPE="" ;;
@@ -282,6 +285,48 @@ ensure_snapshots_subvolume() {
 }
 
 # ---------------------------------------------------------------------------
+# snapper records its configs in the sysconfig file (/etc/conf.d/snapper,
+# SNAPPER_CONFIGS) and the daemon caches that list at startup — it does *not*
+# scan /etc/snapper/configs. A hand-seeded config must therefore be registered
+# here, and snapperd restarted so the CLI and the timeline timer can see it.
+snapper_register() {
+    local name="$1" f=/etc/conf.d/snapper cur new
+    if [ -f "$f" ] && grep -qE "^SNAPPER_CONFIGS=\"?[^\"]*\b$name\b" "$f"; then
+        note "snapper config '$name' already registered"
+        return 0
+    fi
+    cur=""
+    if [ -f "$f" ]; then
+        cur="$(sed -nE 's/^SNAPPER_CONFIGS="?([^"]*)"?[[:space:]]*$/\1/p' "$f" | head -n1)"
+    fi
+    new="$(printf '%s %s' "$cur" "$name" | tr -s ' ' | sed -e 's/^ //' -e 's/ $//')"
+    backup_file "$f"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "[dry-run] register '$name' in $f (SNAPPER_CONFIGS=\"$new\")"
+    elif [ -f "$f" ] && grep -qE '^SNAPPER_CONFIGS=' "$f"; then
+        run "${SUDO[@]}" sed -i -E "s#^SNAPPER_CONFIGS=.*#SNAPPER_CONFIGS=\"$new\"#" "$f"
+    else
+        printf 'SNAPPER_CONFIGS="%s"\n' "$new" >> "$f"
+    fi
+    # The running daemon cached the old (empty) list; drop it so the next call
+    # re-reads the sysconfig file.
+    run "${SUDO[@]}" systemctl try-restart snapperd.service || true
+}
+
+# snapper's create-config always tries to create the .snapshots subvolume and
+# aborts with EEXIST when it already exists — which is exactly the flat layout
+# this installer sets up (a pre-created @snapshots mounted at /.snapshots).
+# Seed the config from the packaged template instead of calling create-config.
+snapper_seed() {
+    local name="$1" tmpl
+    tmpl="/usr/share/snapper/config-templates/default"
+    [ -f "$tmpl" ] || tmpl="/etc/snapper/config-templates/default"
+    run "${SUDO[@]}" mkdir -p /etc/snapper/configs
+    run "${SUDO[@]}" cp "$tmpl" "/etc/snapper/configs/$name"
+    run "${SUDO[@]}" sed -i 's#^SUBVOLUME=.*#SUBVOLUME="/"#' "/etc/snapper/configs/$name"
+}
+
+# ---------------------------------------------------------------------------
 snapper_configure() {
     root_fs_info
     if [ "$ROOT_FSTYPE" != "btrfs" ]; then
@@ -299,16 +344,12 @@ snapper_configure() {
         note "snapper 'root' config already exists — skipping creation"
         ensure_snapshots_subvolume || true
     elif ensure_snapshots_subvolume; then
-        if ! run "${SUDO[@]}" snapper -c root create-config /; then
-            warn "snapper create-config failed; falling back to the default template"
-            run "${SUDO[@]}" mkdir -p /etc/snapper/configs
-            run "${SUDO[@]}" cp /etc/snapper/config-templates/default /etc/snapper/configs/root
-            run "${SUDO[@]}" sed -i 's#^SUBVOLUME=.*#SUBVOLUME="/"#' /etc/snapper/configs/root
-        fi
+        snapper_seed root
     else
         warn "flat @snapshots unavailable — skipping snapper config creation (re-run after reboot)"
         return 0
     fi
+    snapper_register root
 
     backup_file /etc/snapper/configs/root
     local kv
@@ -325,7 +366,9 @@ snapper_configure() {
         SPACE_LIMIT=0.3 \
         FREE_LIMIT=0.2
     do
-        run "${SUDO[@]}" snapper -c root set-config "$kv"
+        # Never abort the install over a retention knob.
+        run "${SUDO[@]}" snapper -c root set-config "$kv" \
+            || warn "snapper set-config $kv failed"
     done
 
     run "${SUDO[@]}" systemctl enable --now snapper-timeline.timer snapper-cleanup.timer || true

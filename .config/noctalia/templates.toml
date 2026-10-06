@@ -4,5 +4,6 @@ enable_builtin_templates = true
 enable_community_templates = true
 # GTK3/GTK4 css import + foot terminal colors follow the palette.
 builtin_ids = ["gtk3", "gtk4", "foot"]
-# Recolor the Papirus icon theme to match the palette.
-community_ids = ["papirus-icons"]
+# No community templates: the papirus-icons one forces the GTK icon theme back
+# to Papirus, overriding the Numix-Circle icon theme set by the installer.
+community_ids = []

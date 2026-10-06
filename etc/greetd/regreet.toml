@@ -13,7 +13,7 @@ QT_QPA_PLATFORM = "wayland"
 application_prefer_dark_theme = true
 cursor_theme_name = "Qogir-dark"
 font_name = "Inter 11"
-icon_theme_name = "Papirus-Dark"
+icon_theme_name = "Numix-Circle"
 theme_name = "adw-gtk3-dark"
 
 [commands]

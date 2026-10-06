@@ -1,6 +1,7 @@
 # AUR packages (installed with yay as the target user, one per line).
 snapper-rollback
 github-desktop-bin
+numix-circle-icon-theme-git
 
 # NOTE: 'yay' is intentionally NOT listed in packages-repository.txt. On
 # EndeavourOS it comes from the 'endeavouros' repo, but it is absent from

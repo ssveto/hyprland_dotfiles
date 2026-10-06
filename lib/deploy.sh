@@ -5,6 +5,30 @@
 
 list_file() { grep -vE '^[[:space:]]*#|^[[:space:]]*$' "$1"; }
 
+# Apply a dconf key to the target user's *live* session. On Wayland, GTK apps
+# (and Noctalia) resolve icons/theme through the XSettings portal backed by the
+# user's dconf, so ~/.config/gtk-3.0/settings.ini alone is not always honoured.
+# Best-effort: skip quietly when the user's session bus is not reachable (e.g.
+# installing from a TTY before first login).
+set_user_dconf() {
+    local username="$1" schema="$2" key="$3" value="$4"
+    local uid rt home
+    uid="$(id -u "$username" 2>/dev/null)" || return 0
+    rt="/run/user/$uid"
+    home="$(getent passwd "$username" | cut -d: -f6)"
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "[dry-run] gsettings set $schema $key '$value' (as $username)"
+        return 0
+    fi
+    if [ ! -S "$rt/bus" ]; then
+        note "user session bus not running; $schema $key will apply on next login"
+        return 0
+    fi
+    runuser -u "$username" -- env HOME="$home" XDG_RUNTIME_DIR="$rt" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=$rt/bus" \
+        gsettings set "$schema" "$key" "$value" || warn "could not set $schema $key"
+}
+
 install_aur_pkgs() {
     local username="$1" list="$2"
     [ -s "$list" ] || return 0
@@ -14,6 +38,14 @@ install_aur_pkgs() {
     if [ "$DRY_RUN" -eq 1 ]; then
         note "[dry-run] yay -S --needed --noconfirm ${aur[*]}"
         return 0
+    fi
+
+    # yay is in the EndeavourOS repo but absent from vanilla Arch; installing it
+    # is therefore best-effort. When it is unavailable the makepkg fallback
+    # below still installs the AUR packages, so never let this abort the run.
+    if ! command -v yay >/dev/null 2>&1; then
+        "${SUDO[@]}" pacman -S --noconfirm --needed --disable-download-timeout yay >/dev/null 2>&1 \
+            || note "yay not available from the repos; building AUR packages directly"
     fi
 
     # Prefer yay as the target user (yay refuses to run as root).
@@ -51,6 +83,16 @@ deploy_desktop() {
 
     install_aur_pkgs "$username" "$repo/packages-aur.txt"
 
+    # Default login shell -> zsh. The shipped .zshrc/.zprofile are only read
+    # once zsh is the login shell, so this is what actually makes zsh "active".
+    if [ "$(getent passwd "$username" | cut -d: -f7)" != "/usr/bin/zsh" ]; then
+        say "Setting zsh as the login shell for $username"
+        run "${SUDO[@]}" chsh -s /usr/bin/zsh "$username" \
+            || warn "could not set zsh as the login shell (run: chsh -s /usr/bin/zsh)"
+    else
+        note "login shell is already zsh"
+    fi
+
     say "Deploying user configs to /home/$username"
     run "${SUDO[@]}" rsync -a "$repo/.config/" "/home/$username/.config/"
     run "${SUDO[@]}" rsync -a "$repo/home_config/" "/home/$username/"
@@ -61,9 +103,17 @@ deploy_desktop() {
             "/home/$username/.local/state/noctalia/settings.toml"
     fi
 
+    # Numix Circle icons for the live session (dconf + XSettings portal).
+    set_user_dconf "$username" org.gnome.desktop.interface icon-theme "Numix-Circle"
+
+    say "Deploying system configs to /etc"
+    run "${SUDO[@]}" rsync -a --chown=root:root "$repo/etc/" /etc/
+
     # Lock on suspend: sleep.target exists only in the system manager, so the
-    # lock must run as a system template (deployed via etc/), instantiated for
-    # this user. Needs a live user manager, hence the DRY_RUN guard.
+    # lock must run as a system template, instantiated for this user. The unit
+    # file is deployed by the etc/ rsync just above — enabling before that
+    # fails with "Unit file ... does not exist". Needs a live user manager,
+    # hence the DRY_RUN guard.
     if [ "$DRY_RUN" -eq 1 ]; then
         note "[dry-run] systemctl enable noctalia-lock@$username.service"
     else
@@ -72,9 +122,6 @@ deploy_desktop() {
     fi
 
     run "${SUDO[@]}" chown -R "$username:$username" "/home/$username"
-
-    say "Deploying system configs to /etc"
-    run "${SUDO[@]}" rsync -a --chown=root:root "$repo/etc/" /etc/
 
     system_fixes
 
