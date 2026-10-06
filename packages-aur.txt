@@ -1,0 +1,3 @@
+# AUR packages (installed with yay as the target user, one per line).
+snapper-rollback
+github-desktop-bin

@@ -1,59 +1,58 @@
-# hyprland-dotfiles
+# hyprland_dotfiles
 
 Personal **Hyprland + [Noctalia](https://github.com/noctalia-dev/noctalia)**
-desktop configuration, managed with [chezmoi](https://chezmoi.io) so it can be
-restored on any Arch machine.
+desktop for an Intel i5-6th-gen / HD 520 / 8 GB machine, packaged in the
+[EndeavourOS Community Edition](https://github.com/EndeavourOS-Community-Editions)
+style (plain `.config/` + `etc/` + `home_config/` trees, rsync-deployed).
 
-Source of truth: `~/.local/share/chezmoi` (this repository). Do **not** edit
-files there by hand unless you mean to change the template itself.
+> This is a **personal** setup: the storage/zram fixes below are tailored to
+> this specific machine and run unconditionally. The primary monitor is assumed
+> to be `DP-3` and the username is taken from the installer.
 
-> This repo was converted from a Sway setup. The compositor is now
-> **Hyprland 0.56+**, which uses the new **Lua configuration**
-> (`~/.config/hypr/hyprland.lua`).
+## Install
 
-## Quick start (fresh Arch)
+### With the EndeavourOS installer
+
+1. Boot the live ISO, open the Welcome app → **Fetch your install customization file**.
+2. Paste:
+   ```
+   https://raw.githubusercontent.com/ssveto/hyprland_dotfiles/main/setup_hyprland_isomode.bash
+   ```
+3. Start the installer and do an **online** install, choosing **"no desktop"**.
+   Calamares runs the script in the target and deploys everything.
+
+### Manually (post-install)
 
 ```sh
-git clone https://github.com/ssveto/hyprland_dotfiles.git ~/.local/share/chezmoi
-cd ~/.local/share/chezmoi
-./bootstrap-arch.sh
+git clone https://github.com/ssveto/hyprland_dotfiles.git
+cd hyprland_dotfiles
+sudo ./hyprland-install.sh
+# preview first with: sudo ./hyprland-install.sh --dry-run
 ```
 
-`bootstrap-arch.sh` is safe and idempotent; it backs up every file it touches
-to `/var/tmp/opencode-fixes/backup-<timestamp>/` and:
+Reboot and pick **Hyprland** at the ReGreet login screen.
 
-1. applies the **SATA/ALPM + zram fixes** (see below),
-2. installs the recorded repo packages (unavailable/EOL packages are skipped),
-3. installs + applies these dotfiles through chezmoi,
-4. configures **greetd + ReGreet**,
-5. configures **btrfs snapshots** (snapper) if `/` is btrfs — see
-   *Fresh install: filesystem & snapshots* below.
+## Repository layout
 
-Useful flags: `--dry-run`, `--skip-storage`, `--storage-only`,
-`--skip-packages`, `--skip-aur`, `--no-upgrade`, `-y`.
+| Path | Deployed to | Notes |
+| --- | --- | --- |
+| `.config/` | `~/.config/` | Hyprland, Noctalia, foot, fuzzel, GTK, portals, user units |
+| `home_config/` | `~/` | `.zshrc`, `.zprofile`, `.gitconfig`, wallpapers, Noctalia settings |
+| `etc/` | `/etc/` | greetd, zram, swappiness, udev rule |
+| `packages-repository.txt` | — | repo packages |
+| `packages-aur.txt` | — | AUR packages (installed via yay as the user) |
+| `lib/system-fixes.sh` | — | SATA/ALPM + zram + snapper logic (shared, idempotent) |
+| `lib/deploy.sh` | — | deployment logic (shared) |
+| `hyprland-install.sh` | — | post-install entry point |
+| `setup_hyprland_isomode.bash` | — | EOS installer customization file |
 
-## What is managed
-
-| Target | Notes |
-| --- | --- |
-| `~/.config/hypr/hyprland.lua` | Hyprland entrypoint (single Lua file, sectioned) |
-| `~/.config/hypr/scripts/` | `power_menu.sh`, `fzf-history.sh`, screenshot helpers |
-| `~/.config/noctalia/config.toml`, `templates.toml` | Noctalia shell config + theme templates |
-| `~/.local/state/noctalia/settings.toml` | Noctalia GUI-managed state (bar layout, lock widget, enabled plugins) — **templated** |
-| `~/.config/systemd/user/noctalia-lock-on-suspend.service` | Locks the session before sleep |
-| `~/.config/xdg-desktop-portal/portals.conf` | Hyprland portal backends |
-| `~/.local/share/wallpapers/` | Wallpaper used by the fallback Noctalia config |
-| `~/.config/foot/` | `foot.ini` + generated Noctalia theme |
-| `~/.config/fuzzel/fuzzel.ini` | dmenu/launcher (power menu, etc.) |
-| `~/.config/gtk-3.0/`, `~/.config/gtk-4.0/` | Generated GTK theme + `settings.ini` |
-| `~/.zshrc`, `~/.zprofile` | Shell config (completion, history, fzf, zoxide, starship) |
-| `~/.gitconfig` | Git identity + lfs filter |
+`home_config/.local/state/noctalia/settings.toml` uses `__HOME__` / `__OUTPUT__`
+placeholders that the installer substitutes (`/home/<user>` and `DP-3`).
 
 ## Fresh install: filesystem & snapshots
 
-The installer (not this repo) creates the filesystems. For **`/` use btrfs on
-the SSD** with a flat subvolume layout, so snapper snapshots and
-`snapper-rollback` work:
+The installer does **not** format disks. For **`/` use btrfs on the SSD** with a
+flat subvolume layout, so snapper and `snapper-rollback` work:
 
 ```sh
 # from the live ISO; SSD = /dev/sda2
@@ -74,34 +73,58 @@ UUID=<ssd>  /.snapshots  btrfs  rw,noatime,compress=zstd:3,subvol=@snapshots  0 
 UUID=<hdd>  /home        ext4   rw,noatime                                    0 0
 ```
 
-`bootstrap-arch.sh` then — **only if `/` is btrfs** — creates the snapper `root`
-config (plus `snap-pac` hooks for automatic pre/post-`pacman` snapshots), sets
-retention (5 hourly / 7 daily / 4 weekly / 2 monthly), enables
-`snapper-timeline.timer`, `snapper-cleanup.timer` and `btrfs-scrub.timer`, and
-writes `/etc/snapper-rollback.conf`.
+If `/` is btrfs, `lib/system-fixes.sh` creates the snapper `root` config (+
+`snap-pac` hooks), sets retention (5 hourly / 7 daily / 4 weekly / 2 monthly),
+enables `snapper-timeline.timer`, `snapper-cleanup.timer`, `btrfs-scrub.timer`
+(trim left to `fstrim.timer`), and writes `/etc/snapper-rollback.conf`.
 
-### Snapshots cover `/` only
-
-`/home` is on the HDD (ext4), so it is **not** snapshotted. Snapshots also live
+**Snapshots cover `/` only** — `/home` is on the HDD (ext4). Snapshots also live
 on the same disk they protect, so they are **not backups**.
 
 - List: `sudo snapper -c root list`
-- Roll back: `sudo snapper-rollback <snapid>` (reboot afterwards), or from a
-  live ISO: `sudo snapper rollback <snapid>`
-- **Back `/home` up off-machine** — the Hitachi HDD has ~44,886 power-on hours.
+- Roll back: `sudo snapper-rollback <snapid>` (reboot after), or from a live ISO:
+  `sudo snapper rollback <snapid>`
+- **Back `/home` up off-machine.**
+
+## SATA/ALPM + zram fixes (`lib/system-fixes.sh`)
+
+This machine's HDD drops its SATA link under aggressive link power management,
+which can freeze the system. The installer:
+
+1. ensures **`ahci.mobile_lpm_policy=1`** on the kernel cmdline (GRUB fallback),
+   then `reinstall-kernels` if it changed. `1` = max performance; `0` means
+   "keep firmware settings", and this firmware already forces
+   `med_power_with_dipm`,
+2. ships a **udev rule** (`etc/udev/rules.d/69-sata-alpm.rules`) forcing
+   `max_performance`, and reloads/triggers it,
+3. provisions **zram** (`etc/systemd/zram-generator.conf`) and sets
+   **`vm.swappiness=100`** (`etc/sysctl.d/99-swappiness.conf`) — swap is
+   zram-only, so a high value is correct,
+4. provisions **snapper** snapshots (above).
+
+Every file it touches under `/etc` is backed up to
+`/var/tmp/opencode-fixes/backup-<timestamp>/`.
+
+Verify after reboot:
+
+```sh
+grep -o 'ahci.mobile_lpm_policy=[0-9]*' /proc/cmdline
+cat /sys/class/scsi_host/host*/link_power_management_policy   # -> max_performance
+```
 
 ## Desktop design
 
 - **Noctalia** owns the bar, launcher, control center, notifications, lock/idle,
-  clipboard, wallpaper and theming. A community plugin,
-  `kenn/keybind-cheatsheet`, replaces the old local Sway keybinds widget.
+  clipboard, wallpaper and theming; the `kenn/keybind-cheatsheet` community
+  plugin replaces the old Sway keybinds widget.
 - **Animations on, kept lean**: popin windows, fading layers, sliding
-  workspaces. Compositor **blur and shadows are disabled**, opacities are 1.0
-  and rounding is modest, so it looks smooth without a heavy GPU cost.
-- **Super+F** uses Hyprland's native *maximize* (`fullscreen mode = maximized`);
-  the old sway-only maximize script is gone.
-- **Alt+Tab / Super+P** use Noctalia's built-in window switcher.
-- Idle/lock is Noctalia's; a systemd `sleep.target` hook locks on suspend.
+  workspaces. Compositor **blur and shadows are off**, rounding is modest.
+- **Super+F** = Hyprland native *maximize* (`fullscreen mode = maximized`);
+  Alt+Tab / Super+P use Noctalia's window switcher.
+- Qt/Electron run natively on Wayland (`qt5-wayland`/`qt6-wayland`,
+  `ELECTRON_OZONE_PLATFORM_HINT=auto`).
+- Idle/lock is Noctalia's; the user unit `noctalia-lock-on-suspend.service`
+  locks on `sleep.target`.
 
 ### Keybindings (Super = main mod)
 
@@ -127,73 +150,21 @@ on the same disk they protect, so they are **not backups**.
 | Super+Ctrl+arrows or hjkl | resize window |
 | Print / Ctrl+Print / Shift+Print | region / window / monitor screenshot |
 
-Layout is dwindle; `Super+V` toggles the split, `Super+G` toggles a group
-(tabbed), `Super+minus` opens the scratchpad (`special:magic`).
+Layout is dwindle; `Super+V` toggles split, `Super+G` toggles a group (tabbed),
+`Super+minus` opens the scratchpad (`special:magic`).
 
-## SATA/ALPM fix (in `bootstrap-arch.sh`)
+## Updating
 
-This machine's HDD (`sdb`) drops its SATA link under aggressive link power
-management, which can freeze the system. The script:
-
-1. ensures **`ahci.mobile_lpm_policy=1`** ("maximum performance") in
-   `/etc/kernel/cmdline` (GRUB fallback handled; `1`, not `0` — `0` means "keep
-   firmware settings", and this box's firmware already forces
-   `med_power_with_dipm`),
-2. installs a **udev rule** forcing `link_power_management_policy=max_performance`
-   (catches hotplug/resume) and triggers it at runtime,
-3. provisions **zram swap** (`/etc/systemd/zram-generator.conf`:
-   `min(ram/2, 4096)`, `zstd`, priority 100) and then sets
-   **`vm.swappiness=100`**. Swap here is **zram-only**, so a high value (prefer
-   fast compressed RAM swap) is correct; this is *not* the usual "10 for an HDD
-   swap" advice,
-4. runs **`reinstall-kernels`** (only if the cmdline changed) to regenerate the
-   systemd-boot entries.
-
-Verify after reboot:
+There is no chezmoi here; updates are pull-and-redeploy:
 
 ```sh
-grep -o 'ahci.mobile_lpm_policy=[0-9]*' /proc/cmdline
-cat /sys/class/scsi_host/host*/link_power_management_policy   # -> max_performance
+cd hyprland_dotfiles && git pull && sudo ./hyprland-install.sh
 ```
 
-## Machine-specific settings
-
-`~/.config/chezmoi/chezmoi.toml` (rendered from `.chezmoi.toml.tmpl`) holds:
-
-- `output` — your primary monitor name, e.g. `DP-3`. Find it with
-  `hyprctl monitors`. It is used by the Noctalia lockscreen widget and the
-  per-monitor wallpaper. Hyprland's own monitor rule is output-agnostic, so the
-  wrong value only affects the lock widget.
-
-After editing, run `chezmoi init && chezmoi apply`.
-
-## Day-to-day workflow
-
-```sh
-chezmoi diff          # see what would change
-chezmoi apply         # apply to $HOME
-chezmoi edit <file>   # edit a managed file in the source dir
-chezmoi re-add <file> # update source from the current $HOME file (non-templated)
-cd "$(chezmoi source-path)" && git add -A && git commit -m "..."
-```
-
-> `settings.toml` is a **template**. If you change Noctalia settings in the GUI,
-> `chezmoi re-add` would overwrite the template placeholders. Prefer
-> `chezmoi diff` and update the `.tmpl` source instead.
+The installer is idempotent, so re-running is safe.
 
 ## Not backed up
 
-- Shell history (`~/.zsh_history`, `~/.bash_history`)
-- Secrets, tokens, SSH keys, keyrings
-- Noctalia runtime state (`notification_history*`, `usage_counts.json`,
-  `recently_used.json`, `instance.id`, `state.toml`)
-- Downloaded/community Noctalia templates and palettes
-- Old backups (`~/.config/noctalia/backup-*`)
-- The wallpaper pack (`~/Pictures/walls-catppuccin-mocha-master`, ~396 MB) —
-  optional; a default wallpaper ships in `~/.local/share/wallpapers/`
-
-## Regenerating package lists
-
-```sh
-cd "$(chezmoi source-path)" && ./export-packages.sh
-```
+- Shell history, secrets, SSH/GPG keys, keyrings, browser profiles
+- Noctalia runtime state (clipboard, notification history, usage counts)
+- The optional wallpaper pack (`~/Pictures/walls-catppuccin-mocha-master`, ~396 MB)

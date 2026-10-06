@@ -1,0 +1,8 @@
+[terminal]
+# The VT to run the greeter on.
+vt = 1
+
+[default_session]
+# ReGreet reads its own settings from /etc/greetd/regreet.toml
+command = "regreet"
+user = "greeter"

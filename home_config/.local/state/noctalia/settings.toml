@@ -3,25 +3,25 @@ config_version = 14
 [lockscreen_widgets]
 enabled = false
 schema_version = 2
-widget_order = [ "lockscreen-login-box@{{ .output }}" ]
+widget_order = [ "lockscreen-login-box@__OUTPUT__" ]
 
     [lockscreen_widgets.grid]
     cell_size = 16
     major_interval = 4
     visible = true
 
-    [lockscreen_widgets.widget."lockscreen-login-box@{{ .output }}"]
+    [lockscreen_widgets.widget."lockscreen-login-box@__OUTPUT__"]
     box_height = 196.0
     box_width = 810.0
     cx = 960.0
     cy = 898.0
-    output = "{{ .output }}"
+    output = "__OUTPUT__"
     placement_height = 1080.0
     placement_width = 1920.0
     rotation = 0.0
     type = "login_box"
 
-        [lockscreen_widgets.widget."lockscreen-login-box@{{ .output }}".settings]
+        [lockscreen_widgets.widget."lockscreen-login-box@__OUTPUT__".settings]
         background_color = "surface_variant"
         background_opacity = 0.88
         background_radius = 12.0
@@ -44,13 +44,13 @@ enabled = [ "kenn/keybind-cheatsheet" ]
 telemetry_enabled = false
 
 [wallpaper]
-directory = "{{ .chezmoi.homeDir }}/.local/share/wallpapers"
+directory = "__HOME__/.local/share/wallpapers"
 
     [wallpaper.default]
-    path = "{{ .chezmoi.homeDir }}/.local/share/wallpapers/EndeavourOS_SpaceStation__3840x2160.png"
+    path = "__HOME__/.local/share/wallpapers/EndeavourOS_SpaceStation__3840x2160.png"
 
     [wallpaper.last]
-    path = "{{ .chezmoi.homeDir }}/.local/share/wallpapers/EndeavourOS_SpaceStation__3840x2160.png"
+    path = "__HOME__/.local/share/wallpapers/EndeavourOS_SpaceStation__3840x2160.png"
 
-    [wallpaper.monitors.{{ .output }}]
-    path = "{{ .chezmoi.homeDir }}/.local/share/wallpapers/EndeavourOS_SpaceStation__3840x2160.png"
+    [wallpaper.monitors.__OUTPUT__]
+    path = "__HOME__/.local/share/wallpapers/EndeavourOS_SpaceStation__3840x2160.png"

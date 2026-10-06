@@ -1,0 +1,100 @@
+# Repo packages for the Hyprland + Noctalia desktop (one per line).
+# Install:  pacman -S --needed $(<packages-repository.txt)
+
+# --- Compositor / session / portals ---
+hyprland
+hyprland-protocols
+xdg-desktop-portal
+xdg-desktop-portal-gtk
+xdg-desktop-portal-hyprland
+qt5-wayland
+qt6-wayland
+
+# --- Login manager ---
+greetd
+greetd-regreet
+
+# --- Noctalia shell + polkit / power ---
+noctalia
+polkit
+power-profiles-daemon
+upower
+playerctl
+
+# --- Audio ---
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+alsa-utils
+sof-firmware
+
+# --- Network / bluetooth / firewall ---
+networkmanager
+network-manager-applet
+bluez
+bluez-utils
+firewalld
+firewall-applet
+
+# --- Terminal / launcher / screenshots ---
+foot
+fuzzel
+wl-clipboard
+grim
+slurp
+swappy
+jq
+brightnessctl
+fzf
+rsync
+
+# --- Files / browser ---
+thunar
+thunar-archive-plugin
+thunar-volman
+gvfs
+gvfs-mtp
+gvfs-gphoto2
+firefox
+
+# --- Fonts / icons / theming ---
+inter-font
+noto-fonts
+noto-fonts-emoji
+ttf-jetbrains-mono
+ttf-nerd-fonts-symbols
+papirus-icon-theme
+adw-gtk-theme
+
+# --- Intel HD 520 graphics ---
+mesa
+vulkan-intel
+intel-media-driver
+libva-intel-driver
+
+# --- Shell / CLI ---
+zsh
+zsh-autosuggestions
+zsh-completions
+zsh-syntax-highlighting
+starship
+zoxide
+git
+nodejs
+npm
+man-db
+
+# --- zram + btrfs snapshots ---
+zram-generator
+btrfs-progs
+snapper
+snap-pac
+btrfsmaintenance
+
+# --- XDG ---
+xdg-user-dirs
+xdg-utils
+
+# --- AUR helper (EndeavourOS ships it in its repo) ---
+yay
