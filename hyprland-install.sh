@@ -20,7 +20,11 @@ usage() {
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run) DRY_RUN=1; shift ;;
-        -u|--user) username="${2:-}"; shift 2 ;;
+        -u|--user)
+            if [ $# -lt 2 ] || [ -z "${2:-}" ]; then
+                echo "option $1 requires a username argument" >&2; usage; exit 2
+            fi
+            username="$2"; shift 2 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage; exit 2 ;;
     esac
@@ -33,8 +37,15 @@ fi
 
 if [ -z "$username" ]; then username="$(logname 2>/dev/null || true)"; fi
 if [ -z "$username" ]; then username="${SUDO_USER:-}"; fi
+# A root shell (e.g. after `su -`) makes logname report "root"; never deploy a
+# desktop into /home/root.
+if [ "$username" = "root" ]; then username=""; fi
 if [ -z "$username" ]; then
     echo "Could not determine the target user; pass --user NAME." >&2
+    exit 1
+fi
+if ! id "$username" >/dev/null 2>&1; then
+    echo "No such user: $username" >&2
     exit 1
 fi
 

@@ -13,9 +13,9 @@ username="${1:?username argument required}"
 repo_url="${REPO_URL:-https://github.com/ssveto/hyprland_dotfiles.git}"
 workdir="/tmp/hyprland_dotfiles"
 DRY_RUN="${DRY_RUN:-0}"
-
+ISOMODE=1
 SUDO=()
-export DRY_RUN
+export DRY_RUN ISOMODE
 
 echo "Installing needed packages..."
 pacman -S --noconfirm --needed --disable-download-timeout git

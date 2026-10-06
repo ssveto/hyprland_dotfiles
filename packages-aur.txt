@@ -1,3 +1,9 @@
 # AUR packages (installed with yay as the target user, one per line).
 snapper-rollback
 github-desktop-bin
+
+# NOTE: 'yay' is intentionally NOT listed in packages-repository.txt. On
+# EndeavourOS it comes from the 'endeavouros' repo, but it is absent from
+# vanilla Arch repos, where a bad target would make 'pacman -S' fail outright.
+# install_aur_pkgs() runs yay when available and otherwise falls back to
+# building packages with makepkg, so AUR support does not depend on it.

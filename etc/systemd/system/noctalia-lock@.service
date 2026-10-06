@@ -1,0 +1,27 @@
+# Lock the Noctalia session of a desktop user before the system sleeps.
+#
+# sleep.target exists only in the system (and early-boot) manager — NOT in the
+# systemd --user manager — so a plain user unit wanted by sleep.target is never
+# started. Enable this system template once per desktop user instead:
+#
+#     systemctl enable noctalia-lock@<username>.service
+#
+# (enabled automatically by hyprland-install.sh)
+[Unit]
+Description=Lock the Noctalia session of user %i before sleep
+Before=sleep.target
+StopWhenUnneeded=yes
+
+[Service]
+Type=oneshot
+User=%i
+# `noctalia msg` IPC-resolves the running shell through the target user's
+# runtime dir; the client hard-fails without XDG_RUNTIME_DIR. Note that %U must
+# NOT be used here: in system units systemd expands it to root's UID
+# ("not influenced by the User= setting"), so the UID is resolved by the shell
+# below, which already runs as the target user.
+ExecStart=/bin/sh -ec 'r="/run/user/$(/usr/bin/id -u)"; export XDG_RUNTIME_DIR="$r"; export DBUS_SESSION_BUS_ADDRESS="unix:path=$r/bus"; exec /usr/bin/noctalia msg session lock'
+TimeoutSec=45
+
+[Install]
+WantedBy=sleep.target

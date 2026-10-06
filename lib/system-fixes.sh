@@ -11,6 +11,11 @@
 # /var/tmp/opencode-fixes/backup-<timestamp>/ first.
 
 : "${DRY_RUN:=0}"
+# ISOMODE: set to 1 by setup_hyprland_isomode.bash when running inside the
+# EndeavourOS/Calamares *chroot* — several calibrations there (findmnt of "/",
+# systemctl) see the live ISO instead of the target system.
+: "${ISOMODE:=0}"
+export ISOMODE DRY_RUN
 if ! declare -p SUDO >/dev/null 2>&1; then
     SUDO=()
 fi
@@ -84,8 +89,15 @@ cmdline_fix() {
             note "adding $param to GRUB_CMDLINE_LINUX_DEFAULT"
             backup_file "$grub_file"
             run "${SUDO[@]}" sed -i -E "s/^(GRUB_CMDLINE_LINUX_DEFAULT=\"[^\"]*)\"/\1 $param\"/" "$grub_file"
-            CMDLINE_CHANGED=1
+            # Only claim success if the substitution actually happened.
+            if grep -qE 'GRUB_CMDLINE_LINUX_DEFAULT="[^"]*\b'"$param"'\b' "$grub_file"; then
+                CMDLINE_CHANGED=1
+            else
+                warn "could not add '$param' to GRUB_CMDLINE_LINUX_DEFAULT; add it manually."
+            fi
         fi
+    elif [ "$ISOMODE" -eq 1 ]; then
+        warn "[chroot] neither /etc/kernel/cmdline nor /etc/default/grub; add '$param' manually post-install."
     else
         warn "No /etc/kernel/cmdline or /etc/default/grub; add '$param' manually."
     fi
@@ -142,6 +154,10 @@ regenerate_boot() {
 
 # ---------------------------------------------------------------------------
 zram_activate() {
+    if [ "$ISOMODE" -eq 1 ]; then
+        note "[chroot] zram will come up on first boot (config deployed)"
+        return 0
+    fi
     if ! pacman -Qq zram-generator >/dev/null 2>&1; then
         note "zram-generator not installed; skipping activation"
         return 0
@@ -156,6 +172,49 @@ zram_activate() {
     fi
     note "swap devices:"
     swapon --show 2>/dev/null | sed 's/^/      /' || true
+}
+
+# ---------------------------------------------------------------------------
+# Identify the root filesystem of the *target* we deploy to.
+#
+# findmnt / describes the root of the running mount namespace. Inside the
+# Calamares chroot (isomode) that root is the live ISO's overlay/tmpfs — not
+# the installed system — which would make every btrfs check below silently skip
+# the whole snapshot setup. /etc/fstab inside that chroot is the target's
+# generated fstab, so when findmnt does not look like a real mount, fall back
+# to its "/" entry. Sets:
+#   ROOT_FSTYPE  btrfs | ext4 | ... ("" when unknown)
+#   ROOT_UUID    filesystem UUID ("" when unknown)
+#   ROOT_DEV     device node ("" when unknown)
+root_fs_info() {
+    ROOT_FSTYPE="$(findmnt -no FSTYPE / 2>/dev/null || true)"
+    ROOT_UUID="$(findmnt -no UUID / 2>/dev/null || true)"
+    ROOT_DEV="$(findmnt -no SOURCE / 2>/dev/null || true)"
+
+    case "$ROOT_FSTYPE" in
+        "" | overlay | tmpfs) ROOT_FSTYPE="" ;;
+        *) return 0 ;;
+    esac
+
+    local line spec
+    line="$(awk '$1 !~ /^#/ && $2 == "/" { print; exit }' /etc/fstab 2>/dev/null || true)"
+    [ -n "$line" ] || return 0
+
+    ROOT_FSTYPE="$(printf '%s\n' "$line" | awk '{ print $3 }')"
+    spec="$(printf '%s\n' "$line" | awk '{ print $1 }')"
+    case "$spec" in
+        UUID=*)
+            ROOT_UUID="${spec#UUID=}"
+            ROOT_DEV="$(readlink -f "/dev/disk/by-uuid/$ROOT_UUID" 2>/dev/null || true)"
+            ;;
+        PARTUUID=*)
+            ROOT_DEV="$(readlink -f "/dev/disk/by-partuuid/${spec#PARTUUID=}" 2>/dev/null || true)"
+            ;;
+        *) ROOT_DEV="$spec" ;;
+    esac
+    if [ -z "$ROOT_UUID" ] && [ -n "$ROOT_DEV" ]; then
+        ROOT_UUID="$(blkid -s UUID -o value "$ROOT_DEV" 2>/dev/null || true)"
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -180,8 +239,8 @@ ensure_snapshots_subvolume() {
     fi
 
     local dev uuid
-    dev="$(findmnt -no SOURCE / 2>/dev/null || true)"
-    uuid="$(findmnt -no UUID / 2>/dev/null || true)"
+    dev="$ROOT_DEV"
+    uuid="$ROOT_UUID"
     if [ -z "$dev" ] || [ -z "$uuid" ]; then
         warn "could not determine the root device/UUID; skipping @snapshots"
         return 1
@@ -224,10 +283,9 @@ ensure_snapshots_subvolume() {
 
 # ---------------------------------------------------------------------------
 snapper_configure() {
-    local rootfs
-    rootfs="$(findmnt -no FSTYPE / 2>/dev/null || true)"
-    if [ "$rootfs" != "btrfs" ]; then
-        note "root filesystem is ${rootfs:-unknown}, not btrfs — skipping snapshots"
+    root_fs_info
+    if [ "$ROOT_FSTYPE" != "btrfs" ]; then
+        note "root filesystem is ${ROOT_FSTYPE:-unknown}, not btrfs — skipping snapshots"
         return 0
     fi
     if ! pacman -Qq snapper >/dev/null 2>&1; then
@@ -284,7 +342,7 @@ snapper_configure() {
     if pacman -Qq snapper-rollback >/dev/null 2>&1; then
         if snapshots_is_flat || [ "$DRY_RUN" -eq 1 ]; then
             local dev
-            dev="$(findmnt -no SOURCE / 2>/dev/null || true)"
+            dev="$ROOT_DEV"
             if [ "$DRY_RUN" -eq 1 ]; then
                 note "[dry-run] write /etc/snapper-rollback.conf (dev=${dev:-?})"
             elif [ -n "$dev" ]; then
@@ -313,9 +371,10 @@ system_fixes() {
     cmdline_fix
     plymouth_fix
     say "Applying udev + sysctl"
-    run "${SUDO[@]}" udevadm control --reload-rules
-    run "${SUDO[@]}" udevadm trigger --subsystem-match=scsi_host --action=add
-    run "${SUDO[@]}" sysctl --system
+    # Non-critical live actions: never abort the install over them.
+    run "${SUDO[@]}" udevadm control --reload-rules || warn "udevadm control failed (rules apply on next boot)"
+    run "${SUDO[@]}" udevadm trigger --subsystem-match=scsi_host --action=add || true
+    run "${SUDO[@]}" sysctl --system || warn "sysctl --system reported errors"
     zram_activate
     snapper_configure
     regenerate_boot

@@ -61,10 +61,15 @@ deploy_desktop() {
             "/home/$username/.local/state/noctalia/settings.toml"
     fi
 
-    # Enable the user before-sleep lock unit without a running user manager.
-    run "${SUDO[@]}" mkdir -p "/home/$username/.config/systemd/user/sleep.target.wants"
-    run "${SUDO[@]}" ln -sf ../noctalia-lock-on-suspend.service \
-        "/home/$username/.config/systemd/user/sleep.target.wants/noctalia-lock-on-suspend.service"
+    # Lock on suspend: sleep.target exists only in the system manager, so the
+    # lock must run as a system template (deployed via etc/), instantiated for
+    # this user. Needs a live user manager, hence the DRY_RUN guard.
+    if [ "$DRY_RUN" -eq 1 ]; then
+        note "[dry-run] systemctl enable noctalia-lock@$username.service"
+    else
+        run "${SUDO[@]}" systemctl enable "noctalia-lock@$username.service" \
+            || warn "could not enable noctalia-lock@$username.service (lock-on-suspend disabled)"
+    fi
 
     run "${SUDO[@]}" chown -R "$username:$username" "/home/$username"
 
@@ -74,8 +79,15 @@ deploy_desktop() {
     system_fixes
 
     if [ "$(systemd-detect-virt 2>/dev/null || echo none)" != "none" ]; then
-        note "VM detected — enabling software rendering for the greeter"
-        run "${SUDO[@]}" sed -i '/^#WLR_RENDERER_ALLOW_SOFTWARE/s/^#//' /etc/greetd/regreet.toml || true
+        # In VMs (no GPU accel) cage would refuse to start without software
+        # rendering, taking the greeter down with it. Allow llvmpipe for it.
+        if grep -q 'WLR_RENDERER_ALLOW_SOFTWARE' /etc/greetd/config.toml; then
+            note "greeter already allows software rendering"
+        else
+            note "VM detected — allowing software rendering for the greeter"
+            run "${SUDO[@]}" sed -i 's/^command = "/command = "env WLR_RENDERER_ALLOW_SOFTWARE=1 /' \
+                /etc/greetd/config.toml
+        fi
     fi
 
     say "Enabling greetd"

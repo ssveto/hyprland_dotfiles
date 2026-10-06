@@ -1,8 +1,14 @@
+# greetd greeter session — ReGreet must run inside a Wayland compositor.
+# Upstream setup (https://github.com/rharish101/ReGreet):
+#   cage -s -mlast -d   = enable VT switching (prevents lockout),
+#                         show on the last-connected monitor only,
+#                         no client-side decorations.
+#   dbus-run-session    = a clean D-Bus session (fixes GTK startup delays).
 [terminal]
 # The VT to run the greeter on.
 vt = 1
 
 [default_session]
 # ReGreet reads its own settings from /etc/greetd/regreet.toml
-command = "regreet"
+command = "dbus-run-session cage -s -mlast -d -- regreet"
 user = "greeter"

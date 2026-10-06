@@ -10,9 +10,10 @@ xdg-desktop-portal-hyprland
 qt5-wayland
 qt6-wayland
 
-# --- Login manager ---
+# --- Login manager (ReGreet runs inside the cage Wayland compositor) ---
 greetd
 greetd-regreet
+cage
 
 # --- Boot splash ---
 plymouth
@@ -69,6 +70,7 @@ ttf-jetbrains-mono
 ttf-nerd-fonts-symbols
 papirus-icon-theme
 adw-gtk-theme
+eos-qogir-icons
 
 # --- Intel HD 520 graphics ---
 mesa
