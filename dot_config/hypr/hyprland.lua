@@ -59,6 +59,13 @@ end)
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 
+-- Let Electron apps (GitHub Desktop, Zed, VS Code, …) pick Wayland natively.
+hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
+-- Firefox on Wayland (already the default since FF 121; explicit is harmless).
+hl.env("MOZ_ENABLE_WAYLAND", "1")
+-- Avoid duplicate client-side titlebars on Qt Wayland apps.
+hl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")
+
 -----------------------
 ---- LOOK AND FEEL ----
 -----------------------
@@ -281,8 +288,14 @@ hl.window_rule({ name = "pavucontrol",     match = { class = "pavucontrol" },   
 hl.window_rule({ name = "preferences",     match = { title = "^(Preferences|About)$" },       float = true })
 hl.window_rule({ name = "file-progress",   match = { title = "File Operation Progress" },     float = true, pin = true, size = { 400, 300 } })
 hl.window_rule({ name = "pip",             match = { title = "Picture in picture" },          float = true, pin = true })
-hl.window_rule({ name = "save-file",       match = { title = "Save File" },                   float = true })
 hl.window_rule({ name = "fzf-history",     match = { class = "fzf-history" },                 float = true, center = true, size = { 900, 520 } })
+
+-- Dev workflow: float DevTools and file pickers.
+hl.window_rule({ name = "devtools",    match = { title = "^(Developer Tools)" },                          float = true })
+hl.window_rule({ name = "file-dialog", match = { title = "^(Open File|Select Folder|Save As|Save File)" }, float = true })
+
+-- Ignore maximize requests from apps; Super+F is the maximize toggle.
+hl.window_rule({ name = "suppress-maximize", match = { class = ".*" }, suppress_event = "maximize" })
 
 -- Keep the machine awake while a video is fullscreen.
 hl.window_rule({ name = "inhibit-firefox",  match = { class = "firefox" },  idle_inhibit = "fullscreen" })

@@ -151,6 +151,8 @@ python
 python-defusedxml
 python-jinja
 python-packaging
+qt5-wayland
+qt6-wayland
 rebuild-detector
 reflector
 reflector-simple
